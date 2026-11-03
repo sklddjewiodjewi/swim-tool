@@ -4,9 +4,16 @@
 По ним программу можно пересобрать с нуля. Первый запуск в новой сессии — по `START.md`.
 
 ## Репозиторий
-- GitHub: `sklddjewiodjewi/swim-tool` (private). Ветка `main`.
-- После каждой «генери»: коммит + push, пользователю — короткий итог и файл `swim_tool.html`
+- GitHub: `sklddjewiodjewi/swim-tool` (public, вместе с `data/` — так решил пользователь). Ветка `main`.
+- Сайт (GitHub Pages, обновляется сам после push): https://sklddjewiodjewi.github.io/swim-tool/swim_tool.html,
+  прозрачность — https://sklddjewiodjewi.github.io/swim-tool/nhatrang-water/site/index.html.
+- Локальная папка проекта: `C:\Home Utils\swim-tool`.
+- После каждой «генери» / «перегенери»: коммит + push, пользователю — короткий итог и файл `swim_tool.html`
   (он открывает его локально из «Загрузок»).
+- **Версии не перезатирать.** При каждой «генери» / «перегенери» сначала создать новую папку
+  `versions/NNN_ГГГГ-ММ-ДД/` (NNN — следующий номер, 001, 002, …) и положить туда копию результата:
+  `swim_tool.html`, `nhatrang-water-index.html` (копия `nhatrang-water/site/index.html`) и содержимое `data/`.
+  Старые папки в `versions/` не менять и не удалять.
 
 ## Кто и зачем
 - Хобби-проект одного человека (Михаил): плавает в море в Нячанге (Вьетнам), в ластах, иногда с лопатками;
@@ -34,6 +41,7 @@
   `site/index.html` (v3.7), `README.md` (модель, стратегии, история версий), `apps-script.gs` (синхронизация через
   Google Таблицу; KEY в файле — заглушка), `доступы-шаблон.md` (шаблон, без секретов).
 - `data/swim_history_2026-11-03.json` — последняя история заплывов (13 заплывов, 08.10–26.10.2026), формат кнопок ⬇️/⬆️.
+- `versions/NNN_ГГГГ-ММ-ДД/` — копии каждой сгенерированной версии (не перезатираются).
 
 ## Как обновлять встроенную прозрачность
 `nhatrang-water/site/index.html` → base64 → заменить содержимое `<script type="text/plain" id="clarityB64">` в `swim_tool.html`.
