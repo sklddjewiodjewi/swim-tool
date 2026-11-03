@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Прозрачность воды — пляж Нячанга</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=Unbounded:wght@500;700&display=swap&subset=cyrillic" rel="stylesheet">
+<style>
+:root{
+  --bg:#E6F0EE; --panel:#F6FAF9; --ink:#12323A; --muted:#55737A; --line:#C9DCD8;
+  --shallow:#7FD1C7; --deep:#0F4C5C; --silt:#A9813F; --good:#2E8B6F; --bad:#B4513A;
+  --disk:#FFFFFF; --diskInk:#12323A;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0B222A; --panel:#10303A; --ink:#DCEEEA; --muted:#8DB0B3; --line:#21505A;
+    --shallow:#3FA79B; --deep:#06242C; --silt:#C9A15C; --good:#5CC79F; --bad:#E07A5F;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0B222A; --panel:#10303A; --ink:#DCEEEA; --muted:#8DB0B3; --line:#21505A;
+  --shallow:#3FA79B; --deep:#06242C; --silt:#C9A15C; --good:#5CC79F; --bad:#E07A5F;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Onest,"Segoe UI",Roboto,Arial,sans-serif}
+main{max-width:980px;margin:0 auto;padding:20px 16px 48px}
+h1{font:600 1.05rem/1.3 Onest,"Segoe UI",sans-serif;margin:0;color:var(--muted)}
+h2{font:600 1.15rem/1.3 Onest,"Segoe UI",sans-serif;margin:0 0 12px}
+a{color:inherit}
+button,input,select{font:inherit;color:inherit}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--shallow);outline-offset:2px}
+.top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.status{font-size:.85rem;color:var(--muted)}
+.status b{color:var(--ink);font-weight:600}
+.hint{font-size:.85rem;color:var(--muted)}
+
+.hero{display:grid;grid-template-columns:120px 1fr;gap:20px;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px}
+.gauge svg{display:block;width:100%;height:auto}
+.wins{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px}
+.win{border-top:1px solid var(--line)}
+.win.now .wl{color:var(--ink)}
+.wl{font-weight:600;color:var(--muted);font-size:.92rem}
+.big{font:700 clamp(2.6rem,9vw,4.2rem)/1 Unbounded,"Arial Black",sans-serif;letter-spacing:-.03em;margin:4px 0 0}
+.wx{display:flex;flex-wrap:wrap;gap:6px 18px;margin:10px 0 6px}
+.wx div{display:flex;flex-direction:column;line-height:1.1}
+.wx b{font:700 1.7rem/1.1 Unbounded,"Arial Black",sans-serif;font-variant-numeric:tabular-nums}
+.wx span{font-size:.78rem;color:var(--muted)}
+.uv b{padding:2px 8px;border-radius:8px;color:#fff;align-self:flex-start}
+.uv0 b{background:#3E8E41}.uv1 b{background:#C9A100}.uv2 b{background:#E07B00}.uv3 b{background:#C8332B}.uv4 b{background:#7B3FA0}
+.tide{font-size:.9rem;margin:2px 0 6px}
+.daynav{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px}
+.daynav button{font:600 .95rem Onest,"Segoe UI",sans-serif;color:var(--ink);background:transparent;border:1px solid var(--line);border-radius:10px;padding:6px 14px;cursor:pointer}
+.daynav button:hover:not(:disabled){background:var(--bg)}
+.daynav button:disabled{opacity:.35;cursor:default}
+.win .factv{font-size:.9rem;margin:2px 0 0}
+.tideday{font-size:.88rem;color:var(--muted);margin:12px 0}
+/* утро / вечер — разный оттенок, между ними тонкая линия, между днями жирная */
+.win.am,tr.w-am td{background:color-mix(in srgb,#F2B84B 9%,transparent)}
+.win.pm,tr.w-pm td{background:color-mix(in srgb,#6F8FD8 10%,transparent)}
+.win{border-radius:10px;padding:10px 12px}
+tr.w-pm td,td.dcell{border-bottom:2px solid var(--muted)}
+td.dcell{vertical-align:middle;text-align:center;background:var(--panel)!important;white-space:nowrap}
+td.dcell.today{box-shadow:inset 4px 0 0 var(--deep);font-weight:600}
+td.wcell{vertical-align:middle;white-space:nowrap}
+td.wcell span{display:block;font-size:.78rem;color:var(--muted)}
+.locbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.locbar select,.locbar input{font-size:.95rem;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+.locres{display:flex;flex-direction:column;gap:2px;margin-top:6px}
+.locres button{text-align:left;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:.9rem}
+.big small{font:500 .32em Unbounded,sans-serif;letter-spacing:0;color:var(--muted);margin-left:.2em}
+.verdict{font-size:1.05rem;font-weight:600;margin:6px 0 2px}
+.range{color:var(--muted);font-size:.9rem;margin:0 0 12px}
+.factors{display:grid;gap:7px;margin:0 0 12px;padding:0;list-style:none}
+.factors li{display:grid;grid-template-columns:110px 1fr 46px;align-items:center;gap:8px;font-size:.88rem}
+.bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--silt)}
+.factors .val{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
+.tip{position:fixed;z-index:50;pointer-events:none;background:var(--ink);color:var(--bg,#fff);font:500 .82rem/1.35 Onest,"Segoe UI",sans-serif;padding:7px 9px;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.25);max-width:320px;display:none}
+.tip table{border-collapse:collapse}.tip td{padding:1px 6px 1px 0;white-space:nowrap;font-variant-numeric:tabular-nums}.tip td.n{text-align:right}.tip tr.p td{font-weight:700}.tip .h{opacity:.7;font-size:.75rem;margin-bottom:3px}
+[data-alt]{cursor:help}
+.others{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.88rem;color:var(--muted)}
+.others b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+
+section{margin-top:28px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+#days{min-width:640px;font-size:.85rem}
+#days th,#days td{padding:6px 7px}
+#days th{white-space:normal;line-height:1.2;vertical-align:bottom}
+#strats{min-width:760px}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;color:var(--muted);white-space:nowrap}
+th.prim,td.prim{background:color-mix(in srgb,var(--shallow) 12%,transparent)}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+td b{font-weight:600}
+tr:last-child td{border-bottom:0}
+tr.is-future td{color:var(--muted)}
+tr.is-future td b{color:var(--ink)}
+.e{display:block;font-size:.78rem}
+.e.good{color:var(--good)} .e.bad{color:var(--bad)}
+input.fact{width:64px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);font-variant-numeric:tabular-nums}
+input.fact::placeholder{color:var(--line)}
+input.fact.set{border-color:var(--deep);font-weight:600}
+.empty{padding:18px;color:var(--muted)}
+.prim-sel{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;font-size:.9rem}
+select{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:5px 8px}
+.st-name b{display:block}
+.st-name code{font-size:.78rem;color:var(--muted)}
+.st-arch{opacity:.6}
+.desc{font-size:.85rem;max-width:34ch}
+.desc .data{display:block;color:var(--muted);font-size:.8rem;margin-top:3px}
+details{margin-top:28px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 16px}
+summary{cursor:pointer;font-weight:600}
+details p,details li{font-size:.92rem;max-width:72ch}
+.foot{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;margin-top:20px;font-size:.85rem;color:var(--muted)}
+.foot label{display:flex;align-items:center;gap:6px}
+.foot select{font-size:.85rem;padding:3px 6px}
+.linkbtn{border:0;background:none;padding:0;text-decoration:underline;color:inherit;font-size:.85rem;cursor:pointer}
+.toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:.9rem;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.on{opacity:1}
+@media (max-width:620px){ .wins{grid-template-columns:1fr} }
+@media (max-width:520px){
+  .hero{grid-template-columns:64px 1fr;gap:14px;padding:14px}
+  .factors li{grid-template-columns:86px 1fr 40px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <div>
+      <div class="locbar"><h1>Прозрачность воды —</h1><select id="locSel" aria-label="Место"></select></div>
+      <div id="locFind" hidden>
+        <div class="locbar" style="margin-top:6px"><input id="locQ" placeholder="Город или пляж" autocomplete="off"><button class="linkbtn" id="locCancel" type="button">Отмена</button></div>
+        <div class="locres" id="locRes"></div>
+      </div>
+    </div>
+    <div class="status" id="status">Загрузка…</div>
+  </div>
+
+  <div class="hero">
+    <div class="gauge" id="gauge" aria-hidden="true"></div>
+    <div>
+      <div class="status" id="heroDate"></div>
+      <div class="wins" id="wins"></div>
+      <p class="tideday" id="tideday"></p>
+      <ul class="factors" id="factors"></ul>
+      <div class="daynav"><button type="button" id="dPrev">‹ Вчера</button><button type="button" id="dToday" hidden>Сегодня</button><button type="button" id="dNext">Завтра ›</button></div>
+    </div>
+  </div>
+  <p class="hint" id="msg" role="status" aria-live="polite"></p>
+
+  <section>
+    <h2>По дням</h2>
+    <div class="tablewrap"><table id="days"><thead id="daysHead"></thead><tbody id="daysBody"></tbody></table></div>
+    <p class="hint">Факт — видимость в метрах (<b>3,5</b>) или отклонение от основного прогноза (<b>+1</b>, <b>−2</b>), отдельно за утро и вечер. Пусто — удалить. Под прогнозом стратегии — её ошибка: плюс значит завысила. * — прогноз задним числом по фактической погоде. Прилив: ↑ прилив, ↓ отлив, число — уровень моря в конце окна относительно среднего. Волна — максимум с полудня накануне до конца окна, ветер и температура — средние по окну, УФ — максимум. ↘ — ветер с моря.</p>
+  </section>
+
+  <section>
+    <h2>Стратегии</h2>
+    <div class="prim-sel"><label for="primSel">Основная:</label><select id="primSel"></select></div>
+    <div class="tablewrap"><table id="strats"><thead><tr>
+      <th>Стратегия</th><th>Суть и данные</th><th>По факт. погоде</th><th>На сегодня</th><th>На 1–2 дня</th><th>На 3–6 дней</th><th>Ближе всех</th>
+    </tr></thead><tbody id="stratsBody"></tbody></table></div>
+    <p class="hint">В ячейке: средняя ошибка, м / смещение, м (минус — занижает) / число наблюдений.</p>
+  </section>
+
+  <details>
+    <summary>Как это устроено</summary>
+    <p>При каждом открытии страница берёт данные Open-Meteo и сохраняет снимок входных данных на каждую дату: дождь по часам в городе и в бассейне реки Кай, волну (высота, период, направление), ветер, облачность, уровень моря, температуру воды, течение и расход реки. Для прошлых дней — по фактической погоде, для будущих — отдельный снимок на каждый день выпуска прогноза.</p>
+    <p>Стратегия — это алгоритм плюс набор данных, которые он берёт из снимка. Все активные стратегии считаются по всем снимкам, результаты сохраняются. Новая стратегия сразу пересчитывается по всей накопленной истории. Изменённая стратегия — это новая стратегия с новым кодом, старая уходит в архив вместе со своей историей.</p>
+    <p>Данные: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> — Forecast, Marine и Flood API (GloFAS), бесплатно для некоммерческого использования.</p>
+  </details>
+
+  <div class="foot">
+    <label>Место <select id="pPlace">
+      <option>Центр (Чан Фу)</option><option>Юг (Бао Дай)</option><option>Север (Хон Чонг)</option><option>Бай Зыонг</option><option>Другое</option>
+    </select></label>
+    <label>Как меряю <select id="pMethod">
+      <option>Ступни, вода по грудь</option><option>Дно, стоя по шею</option><option>По горизонтали в маске</option><option>Другое</option>
+    </select></label>
+  </div>
+  <p class="foot"><span id="stats"></span><button class="linkbtn" id="syncBtn">Синхронизация</button><button class="linkbtn" id="syncLink" hidden>Ссылка для другого устройства</button><button class="linkbtn" id="export">Скачать лог</button><button class="linkbtn" id="importBtn">Загрузить лог</button><input type="file" id="import" accept=".json,application/json" hidden></p>
+</main>
+<div class="tip" id="tip" role="tooltip"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+"use strict";
+const TZ="Asia/Ho_Chi_Minh", SCHEMA=3;
+// v3.2: страница может работать внутри другой страницы (фрейм в «Навигаторе заплыва»).
+// HOST — окно верхнего уровня: его адрес для ссылки синхронизации и #sync=…
+const HOST=(()=>{ try{ if(window.top!==window && window.top.location.href) return window.top; }catch(e){} return window; })();
+// Места. Нячанг настроен вручную (точки моря, города, бассейна и устья реки Кай).
+// Остальные — из поиска Open-Meteo: одна точка, без реки; сезонная норма — нячангская.
+const NHATRANG={id:"nhatrang", name:"Нячанг, городской пляж", marine:[12.24,109.23], coast:[12.24,109.195], basin:[12.30,108.95], river:[12.265,109.19],
+  upper:[[12.27,108.89],[12.36,108.78],[12.20,108.80]]};   // v3.6: верховья Кай (Кханьвинь и выше)
+let LOC=NHATRANG;
+let LS="ntClarity.v2"; const SYNC_KEY="ntClarity.sync2", PEND_KEY="ntClarity.pending2", PREF_KEY="ntClarity.prefs";
+const DEFAULT_PRIMARY="beach-v2";
+const WINS=[{id:"am",name:"Утро",label:"05–10",a:5,b:10},{id:"pm",name:"Вечер",label:"15–18",a:15,b:18}];
+const WMAP=Object.fromEntries(WINS.map(w=>[w.id,w]));
+
+const $=id=>document.getElementById(id);
+const snaps={};   // key "YYYY-MM-DD|an" or "YYYY-MM-DD|<issued>" -> snapshot
+const obs={};     // date -> observation
+let prefs={primary:"auto", place:"Центр (Чан Фу)", method:"Ступни, вода по грудь"};
+let srcLabel="", warns=[];
+
+// ---------- utils ----------
+const todayStr=()=>new Intl.DateTimeFormat("en-CA",{timeZone:TZ}).format(new Date());
+const nowHM=()=>new Intl.DateTimeFormat("ru-RU",{timeZone:TZ,hour:"2-digit",minute:"2-digit"}).format(new Date());
+const shift=(ds,n)=>{ const d=new Date(ds+"T12:00:00Z"); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); };
+const ddiff=(a,b)=>Math.round((new Date(a+"T12:00:00Z")-new Date(b+"T12:00:00Z"))/864e5);
+const pad=n=>String(n).padStart(2,"0");
+const r1=x=>x==null||isNaN(x)?null:Math.round(x*10)/10;
+const r2=x=>x==null||isNaN(x)?null:Math.round(x*100)/100;
+const fmt=x=>(x==null||isNaN(x))?"—":(Math.round(x*10)/10).toLocaleString("ru-RU",{maximumFractionDigits:1});
+const sgn=x=>(x>0?"+":x<0?"−":"")+fmt(Math.abs(x));
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const mean=a=>a.length?a.reduce((s,x)=>s+x,0)/a.length:null;
+const dayName=ds=>new Date(ds+"T12:00:00").toLocaleDateString("ru-RU",{weekday:"short"});
+const dateShort=ds=>new Date(ds+"T12:00:00").toLocaleDateString("ru-RU",{day:"numeric",month:"short"}).replace(".","");
+const dateRu=ds=>new Date(ds+"T12:00:00").toLocaleDateString("ru-RU",{day:"numeric",month:"long"});
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function toast(t){ const el=$("toast"); el.textContent=t; el.classList.add("on"); clearTimeout(toast._t); toast._t=setTimeout(()=>el.classList.remove("on"),2600); }
+function msg(t){ $("msg").textContent=t||""; }
+// v3.6: подсказка «альтернативы по стратегиям» при наведении на значение
+function altList(s,w,P){
+  if(!s||!s.p) return [];
+  const pv=s.p[pk(P,w)];
+  return computed().map(st=>{ const v=s.p[pk(st.id,w)]; return {id:st.id,name:st.name,shadow:st.status==="shadow",v, d:(v!=null&&pv!=null&&st.id!==P)?v-pv:null}; });
+}
+function altHTML(s,w,P,title){
+  const L=altList(s,w,P); if(!L.length) return "";
+  return `<div class="h">${esc(title)} · по стратегиям</div><table>`+L.map(a=>`<tr class="${a.id===P?"p":""}"><td>${esc(a.name)}${a.id===P?" ★":a.shadow?" · фон":""}</td><td class="n">${a.v!=null?fmt(a.v)+" м":"—"}</td><td class="n">${a.d!=null?sgn(a.d):""}</td></tr>`).join("")+"</table>";
+}
+let tipData=new Map(), tipN=0;
+function tipKey(html){ const k="t"+(++tipN); tipData.set(k,html); return k; }
+function setupTip(){
+  const el=$("tip");
+  const show=(t,x,y)=>{ const h=tipData.get(t.dataset.alt); if(!h){ el.style.display="none"; return; } el.innerHTML=h; el.style.display="block";
+    const r=el.getBoundingClientRect(); el.style.left=Math.max(6,Math.min(innerWidth-r.width-6,x+12))+"px"; el.style.top=(y+16+r.height>innerHeight? y-r.height-10 : y+16)+"px"; };
+  document.addEventListener("mouseover",e=>{ const t=e.target.closest&&e.target.closest("[data-alt]"); if(t) show(t,e.clientX,e.clientY); else el.style.display="none"; });
+  document.addEventListener("mousemove",e=>{ const t=e.target.closest&&e.target.closest("[data-alt]"); if(t) show(t,e.clientX,e.clientY); });
+  document.addEventListener("click",e=>{ const t=e.target.closest&&e.target.closest("[data-alt]"); if(t&&!e.target.closest("input")) show(t,e.clientX,e.clientY); else el.style.display="none"; });   // тач: по нажатию
+  addEventListener("scroll",()=>el.style.display="none",true);
+}
+function verdictFor(v){ if(v<1.5) return "Мутно"; if(v<3) return "Так себе"; if(v<5) return "Нормально"; if(v<8) return "Хорошо"; return "Отлично"; }
+
+// ---------- strategies ----------
+// Стратегия неизменяема: правка формулы или данных = новый id, старая -> status:"archived".
+const BASE_V1=[3,4,5,6,7,6.5,6.5,6,5,3,2,2.5];
+function seasonBase(ds){
+  const d=new Date(ds+"T12:00:00"), m=d.getMonth(), day=d.getDate();
+  const dim=new Date(d.getFullYear(),m+1,0).getDate();
+  const t=(day-0.5)/dim-0.5, w=Math.abs(t), m2=t>=0?(m+1)%12:(m+11)%12;
+  return BASE_V1[m]*(1-w)+BASE_V1[m2]*w;
+}
+// индексы почасовых массивов снимка: 0 = 12:00 предыдущего дня, 12 = 00:00 целевого, 30 = 18:00 целевого
+const H_FROM=-12;
+function rainDay(s,i){ const c=s.dly.rainC, b=s.dly.rainB; if(!c) return null; const vc=c[i]??0, vb=b?(b[i]??vc):vc; return 0.4*vc+0.6*vb; }
+const HI=h=>h-H_FROM;   // индекс часа h целевого дня в почасовых массивах снимка (= 12+h)
+const winVals=(arr,w)=>(arr||[]).slice(HI(w.a),HI(w.b)+1).filter(v=>v!=null);
+function circMean(a){ if(!a.length) return null; const sx=a.reduce((t,x)=>t+Math.sin(x*Math.PI/180),0), cx=a.reduce((t,x)=>t+Math.cos(x*Math.PI/180),0); return (Math.atan2(sx,cx)*180/Math.PI+360)%360; }
+function rainW(s){ if(!s.dly||!s.dly.rainC) return null; const R=i=>rainDay(s,i)??0; return 0.6*R(7)+1.0*R(6)+0.6*R(5)+0.3*R(4); }
+function riverRatio(s){ return (s.dly&&s.dly.q!=null && s.dly.qmed>0) ? s.dly.q/s.dly.qmed : null; }
+// признаки для окна: волна — макс. с 12:00 накануне до конца окна; ветер — по окну
+function featW(s,w){
+  const wv=(s.h.wave||[]).slice(0,HI(w.b)+1).filter(v=>v!=null);
+  const sp=winVals(s.h.wspd,w), dir=circMean(winVals(s.h.wdir,w));
+  return { rainW:rainW(s), waveMax: wv.length?Math.max(...wv):null, windMean: sp.length?mean(sp):null, windDir:dir,
+    onshore: dir!=null && dir>=30 && dir<=160, riverRatio:riverRatio(s) };
+}
+function multV1(f){
+  const m={rain:1,wave:1,wind:1,river:1};
+  if(f.rainW!=null) m.rain=1/(1+f.rainW/25);
+  if(f.waveMax!=null) m.wave=1/(1+Math.max(0,f.waveMax-0.4)*1.4);
+  if(f.windMean!=null) m.wind=1/(1+Math.max(0,f.windMean-12)/35*(f.onshore?1.3:0.7));
+  if(f.riverRatio!=null) m.river=Math.max(0.4,1/(1+Math.max(0,f.riverRatio-1)*0.4));
+  return m;
+}
+// погода по окну — для показа, в стратегиях пока не участвует
+function wx(s,w){
+  const a=winVals(s.h.temp,w), t=winVals(s.h.sst,w), u=winVals(s.h.uv,w);
+  const sl=s.h.sl||[], from=sl[HI(w.a)], to=sl[HI(w.b)];
+  let tide=null;
+  if(from!=null&&to!=null){ const d=to-from; tide={from,to,dir: d>0.03?1:d<-0.03?-1:0}; }
+  return { air:a.length?mean(a):null, sst:t.length?mean(t):null, uv:u.length?Math.max(...u):null, tide };
+}
+function tideExtremes(s){
+  const sl=s.h.sl||[], out=[];
+  for(let i=HI(0);i<=HI(23)&&i+1<sl.length;i++){
+    const p=sl[i-1],c=sl[i],n=sl[i+1]; if(p==null||c==null||n==null) continue;
+    if(c>=p&&c>n) out.push({h:i-HI(0),v:c,hi:true}); else if(c<=p&&c<n) out.push({h:i-HI(0),v:c,hi:false});
+  }
+  return out;
+}
+// ---------- v3.6: фоновые стратегии (status:"shadow") ----------
+// Считаются и пишутся в лог вместе с основными, в статистике есть, основной не становятся,
+// пока пользователь сам не выберет. Все коэффициенты — стартовые оценки, подкручиваются по фактам
+// (подкрутка = новая стратегия с новым id).
+function v2mult(s,w){ return multV1(featW(s,w)); }
+// v3a/v3b — прилив. По наблюдениям пользователя: в прилив прозрачность выше прогноза. Отлив не штрафуется.
+const TIDE_A={per01:0.07, max:0.20};          // +7 % на каждые +0.1 м подъёма за окно, не более +20 %
+function tideRise(s,w){ const sl=s.h.sl||[], a=sl[HI(w.a)], b=sl[HI(w.b)]; return a!=null&&b!=null? b-a : null; }
+function tideLevel(s,w){ const v=winVals(s.h.sl,w); return v.length?mean(v):null; }
+// v4 — река Кай по модельному расходу (GloFAS через Open-Meteo Flood API) с запаздыванием 1–2 дня.
+const RIVER4={k:0.6, lag:[1,0.8,0.6], min:0.3};
+function riverLagRatio(s){
+  const q=s.dly&&s.dly.qs, qm=s.dly&&s.dly.qmeds; if(!q||!qm) return null;
+  let r=null; for(let i=0;i<RIVER4.lag.length;i++){ const j=q.length-1-i, x=q[j], m=qm[j]; if(x==null||!(m>0)) continue;
+    const v=1+(x/m-1)*RIVER4.lag[i]; r=r==null?v:Math.max(r,v); }
+  return r;
+}
+// v5 — дожди в верховьях Кай: дождь → почва (ведро) → задержка в реке → устье → снос к пляжу ветром.
+// Река ~80 км, паводковая волна ~1–1.5 м/с + добегание по склонам → муть в устье через ~12–36 ч, пик ~24 ч,
+// дальше рассеивается за 2–3 суток. Устье севернее пляжа: ветер с севера/северо-востока несёт муть на пляж.
+const UP5={bucket:15, drain:5, lag0:8, peak:24, decay:36, k:0.02, windFrom:20, calm:5, calmF:0.8};
+function upKernel(lag){ const c=UP5; if(lag<c.lag0) return 0; if(lag<=c.peak) return (lag-c.lag0)/(c.peak-c.lag0); return Math.exp(-(lag-c.peak)/c.decay); }
+// куски дождя: [час относительно 00:00 целевого дня, мм]. Дни −7…−2 — суточные суммы (центр — полдень),
+// утро вчерашнего дня — остаток суток, дальше — почасово (массив снимка начинается с 12:00 вчера).
+function upChunks(s){
+  const d=s.dly, hr=s.h.rainU||s.h.rainB, dd=d.rainU||d.rainB; if(!hr||!dd) return null;
+  const out=[];
+  for(let i=0;i<=5;i++) if(dd[i]!=null) out.push([(i-7)*24+12, dd[i]]);
+  const pmY=hr.slice(0,12).reduce((t,v)=>t+(v||0),0);
+  if(dd[6]!=null) out.push([-18, Math.max(0,dd[6]-pmY)]);
+  hr.forEach((v,i)=>{ if(v!=null) out.push([i+H_FROM+0.5, v]); });
+  return out;
+}
+function upMud(s,w){
+  const ch=upChunks(s); if(!ch) return null;
+  const tw=(w.a+w.b)/2; let fill=0, prevT=ch.length?ch[0][0]:0, M=0, eff=0;
+  for(const [t,mm] of ch){
+    if(t>tw) break;
+    fill=Math.max(0, fill-UP5.drain*(t-prevT)/24); prevT=t;
+    const room=UP5.bucket-fill, put=Math.min(room,mm), over=mm-put; fill+=put;
+    if(over>0){ eff+=over; M+=over*upKernel(tw-t); }
+  }
+  return {mud:M, eff};
+}
+function upWind(s,w){
+  const sp=(s.h.wspd||[]).slice(0,HI(w.b)+1).filter(v=>v!=null), dir=circMean((s.h.wdir||[]).slice(0,HI(w.b)+1).filter(v=>v!=null));
+  if(!sp.length||dir==null) return {f:1, dir:null, sp:null};
+  const m=mean(sp); if(m<UP5.calm) return {f:UP5.calmF, dir, sp:m};
+  return {f:0.75+0.25*Math.cos((dir-UP5.windFrom)*Math.PI/180), dir, sp:m};
+}
+function upMult(s,w){ const u=upMud(s,w); if(!u) return null; const wf=upWind(s,w); return {m:1/(1+UP5.k*u.mud*wf.f), mud:u.mud, eff:u.eff, wf}; }
+// местный дождь у берега (без бассейна) — для v5, чтобы бассейн не учитывался дважды
+function rainLocalW(s){ const c=s.dly&&s.dly.rainC; if(!c) return null; const R=i=>c[i]??0; return 0.6*R(7)+1.0*R(6)+0.6*R(5)+0.3*R(4); }
+const DIRS=["С","СВ","В","ЮВ","Ю","ЮЗ","З","СЗ"]; const dirTxt=d=>d==null?"":DIRS[Math.round(d/45)%8];
+const STRATEGIES=[
+  { id:"season", name:"Сезон", status:"active",
+    desc:"Только сезонная норма по месяцам, без погоды, одинаково утром и вечером. Базовая линия: стратегия, которая её не обыгрывает, бесполезна.",
+    data:"дата",
+    compute:(s,w)=>seasonBase(s.target) },
+  { id:"persist", name:"Вчера", status:"active",
+    desc:"Последнее наблюдение в том же окне до дня выпуска прогноза (не старше 5 дней). Вторая базовая линия.",
+    data:"твои наблюдения",
+    compute:(s,w,ctx)=>ctx.lastObs(s.issued==="an"?s.target:s.issued, w.id) },
+  { id:"beach-v1", name:"Пляж v1", status:"archived",
+    desc:"Один прогноз на весь день: волна до 18:00, ветер 06–18. Заменена v2 после разбивки на утро и вечер.",
+    data:"дождь, волна, ветер, расход реки" },
+  { id:"beach-v2", name:"Пляж v2", status:"active",
+    desc:"Как v1, но отдельно на утро и вечер: волна — макс. с полудня накануне до конца окна, ветер — средний по окну. Дождь и река — как в v1.",
+    data:"дождь, волна, ветер, расход реки",
+    compute:(s,w)=>{ const m=multV1(featW(s,w)); return clamp(seasonBase(s.target)*m.rain*m.wave*m.wind*m.river,0.3,15); },
+    explain:(s,w)=>{ const f=featW(s,w), m=multV1(f), out=[];
+      out.push(["Дождь",m.rain,`взвеш. сумма ${fmt(f.rainW)} мм`]);
+      out.push(["Прибой",m.wave,`макс. ${fmt(f.waveMax)} м`]);
+      out.push(["Ветер",m.wind,`${fmt(f.windMean)} км/ч${f.onshore?", с моря":""}`]);
+      if(f.riverRatio!=null) out.push(["Река Кай",m.river,`расход ×${fmt(f.riverRatio)} к норме`]);
+      return out; } },
+  { id:"beach-v3a", name:"Прилив ↑", status:"shadow",
+    desc:"Пляж v2 × поправка на прибывающую воду: +7 % на каждые +0.1 м подъёма уровня за окно, не больше +20 %. Отлив не штрафуется.",
+    data:"как v2 + уровень моря (модель)",
+    compute:(s,w)=>{ const d=tideRise(s,w); if(d==null) return null; const m=v2mult(s,w);
+      return clamp(seasonBase(s.target)*m.rain*m.wave*m.wind*m.river*(1+clamp(d/0.1*TIDE_A.per01,0,TIDE_A.max)),0.3,15); },
+    explain:(s,w)=>{ const d=tideRise(s,w); return [["Прилив",1+clamp((d||0)/0.1*TIDE_A.per01,0,TIDE_A.max),`уровень за окно ${sgn(d)} м`]]; } },
+  { id:"beach-v3b", name:"Высокая вода", status:"shadow",
+    desc:"Пляж v2 × поправка на высокий уровень: средний уровень в окне выше среднего моря → до +20 % (при +0.3 м и выше). Низкая вода не штрафуется.",
+    data:"как v2 + уровень моря (модель)",
+    compute:(s,w)=>{ const L=tideLevel(s,w); if(L==null) return null; const m=v2mult(s,w);
+      return clamp(seasonBase(s.target)*m.rain*m.wave*m.wind*m.river*(1+clamp(L,0,0.3)/0.3*0.20),0.3,15); },
+    explain:(s,w)=>{ const L=tideLevel(s,w); return [["Уровень",1+clamp(L||0,0,0.3)/0.3*0.2,`средний ${sgn(L)} м`]]; } },
+  { id:"beach-v4", name:"Река Кай", status:"shadow",
+    desc:"Пляж v2, но река Кай сильнее и с запаздыванием: берётся худшее из расхода сегодня, вчера (×0.8) и позавчера (×0.6) к сезонной медиане; поправка 1/(1+0.6·(отношение−1)), не ниже ×0.3.",
+    data:"дождь, волна, ветер, расход реки за 3 дня (GloFAS, модель)",
+    compute:(s,w)=>{ const r=riverLagRatio(s); if(r==null) return null; const m=v2mult(s,w);
+      return clamp(seasonBase(s.target)*m.rain*m.wave*m.wind*Math.max(RIVER4.min,1/(1+Math.max(0,r-1)*RIVER4.k)),0.3,15); },
+    explain:(s,w)=>{ const r=riverLagRatio(s); return [["Река Кай",Math.max(RIVER4.min,1/(1+Math.max(0,(r||1)-1)*RIVER4.k)),`расход ×${fmt(r)} к норме (с запаздыванием)`]]; } },
+  { id:"beach-v5", name:"Дожди в верховьях", status:"shadow",
+    desc:"Сезон × волна × ветер (как v2) × местный дождь у берега × муть от дождей в верховьях Кай: почва впитывает первые 15 мм (сохнет 5 мм/сут), излишек доходит до устья через 8–24 ч (пик сутки), рассеивается ~36 ч; ветер с С/СВ несёт муть на пляж (×1), с Ю — ×0.5. Поправка 1/(1+0.02·муть). Река по GloFAS не используется.",
+    data:"дождь в 3 точках верховий, дождь у берега, волна, ветер",
+    compute:(s,w)=>{ const u=upMult(s,w); if(!u) return null; const f=featW(s,w), m=multV1({...f,rainW:rainLocalW(s),riverRatio:null});
+      return clamp(seasonBase(s.target)*m.rain*m.wave*m.wind*u.m,0.3,15); },
+    explain:(s,w)=>{ const u=upMult(s,w); if(!u) return []; return [["Верховья Кай",u.m,`излишек дождя ${fmt(u.eff)} мм, муть ${fmt(u.mud)}, ветер ${dirTxt(u.wf.dir)} ×${r2(u.wf.f)}`]]; } }
+];
+const SMAP=Object.fromEntries(STRATEGIES.map(s=>[s.id,s]));
+const active=()=>STRATEGIES.filter(s=>s.status==="active");
+const computed=()=>STRATEGIES.filter(s=>s.status==="active"||s.status==="shadow");
+const pk=(id,w)=>id+"@"+w;
+const LP=()=>LOC.id==="nhatrang"?"":LOC.id+":";   // префикс ключей для мест кроме Нячанга
+const oid=(ds,w)=>LP()+ds+"|"+w;
+const inLoc=x=>(x.loc||"nhatrang")===LOC.id;
+const obsFor=(ds,w)=>{ const o=obs[oid(ds,w)]; return o&&!o.deleted&&o.actual>0?o:null; };
+
+const ctx={ lastObs(before,win){
+  const c=Object.values(obs).filter(o=>!o.deleted && o.win===win && o.actual>0 && o.date<before && ddiff(before,o.date)<=5).sort((a,b)=>b.date.localeCompare(a.date));
+  return c.length?c[0].actual:null; } };
+
+// ---------- storage ----------
+function loadLocal(){
+  try{ const s=JSON.parse(localStorage.getItem(LS)||"null"); if(s){ Object.assign(snaps,s.snaps||{}); Object.assign(obs,s.obs||{}); } }catch(e){}
+  try{ Object.assign(prefs, JSON.parse(localStorage.getItem(PREF_KEY)||"{}")); }catch(e){}
+}
+// локально полные снимки храним 60 дней, старше — только прогнозы стратегий (полная история — в таблице и в скачанном логе)
+const KEEP_FULL=60;
+function saveLocal(){
+  const cut=shift(todayStr(),-KEEP_FULL), out={};
+  for(const [k,s] of Object.entries(snaps)) out[k]= s.target<cut&&s.h ? {key:s.key,target:s.target,issued:s.issued,lead:s.lead,schema:s.schema,at:s.at,v:s.v,p:s.p,lite:true} : s;
+  try{ localStorage.setItem(LS, JSON.stringify({snaps:out,obs})); }catch(e){ msg("Локальное хранилище переполнено: "+e.message); }
+}
+function savePrefs(){ try{ localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); }catch(e){} }
+
+// слияние: побеждает более свежая версия, прогнозы стратегий объединяются
+function ver(x){ return x.v||x.updated||""; }
+function merged(a,b){
+  if(!a) return b; if(!b) return a;
+  const [o,n]= ver(b)>=ver(a) ? [a,b] : [b,a];
+  if(!(o.p||n.p)) return n;
+  const r={...n, p:{...(o.p||{}),...(n.p||{})}};
+  if(!r.h && o.h){ r.h=o.h; r.dly=o.dly; delete r.lite; }   // не терять входные данные
+  return r;
+}
+
+// ---------- sync (Google Apps Script) ----------
+let sync=null, syncState="";
+const pend={snaps:{},obs:{}};
+try{ sync=JSON.parse(localStorage.getItem(SYNC_KEY)||"null"); }catch(e){}
+try{ const p=JSON.parse(localStorage.getItem(PEND_KEY)||"null"); if(p){ Object.assign(pend.snaps,p.snaps||{}); Object.assign(pend.obs,p.obs||{}); } }catch(e){}
+function savePend(){ try{ localStorage.setItem(PEND_KEY, JSON.stringify(pend)); }catch(e){} }
+function setSync(url,key){
+  sync={url,key,since:{}}; try{ localStorage.setItem(SYNC_KEY, JSON.stringify(sync)); }catch(e){}
+  Object.values(snaps).forEach(s=>pend.snaps[s.key]=s); Object.values(obs).forEach(o=>pend.obs[o.id]=o); savePend();
+}
+function queue(kind,item){ if(!sync) return; pend[kind][kind==="snaps"?item.key:item.id]=item; savePend(); scheduleFlush(); }
+async function pull(){
+  if(!sync) return;
+  try{
+    if(typeof sync.since!=="object"||!sync.since) sync.since={nhatrang:sync.since||""};
+    const j=await getJSON(sync.url+"?key="+encodeURIComponent(sync.key)+"&since="+encodeURIComponent(sync.since[LOC.id]||""),20000);
+    if(j.error) throw new Error(j.error);
+    (j.snaps||[]).filter(inLoc).forEach(s=>{ snaps[s.key]=merged(snaps[s.key],s); });
+    (j.obs||[]).filter(inLoc).forEach(o=>{ obs[o.id]=merged(obs[o.id],o); });
+    if(j.now){ sync.since[LOC.id]=j.now; localStorage.setItem(SYNC_KEY, JSON.stringify(sync)); }
+    saveLocal(); syncState="ok";
+  }catch(e){ syncState="ошибка: "+e.message; }
+}
+let flushT=null;
+function scheduleFlush(){ clearTimeout(flushT); flushT=setTimeout(flush,1000); }
+async function flush(){
+  if(!sync) return;
+  const s=Object.values(pend.snaps), o=Object.values(pend.obs);
+  if(!s.length && !o.length){ if(!syncState.startsWith("ошибка")) syncState="ok"; renderStatus(); return; }
+  try{
+    for(let i=0;i<Math.max(s.length,o.length,1);i+=40){   // порциями, чтобы не упереться в лимиты
+      const bs=s.slice(i,i+40), bo=o.slice(i,i+40); if(!bs.length&&!bo.length) break;
+      const r=await fetch(sync.url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({key:sync.key,snaps:bs,obs:bo})});
+      const j=await r.json(); if(j.error) throw new Error(j.error);
+      bs.forEach(x=>{ if(pend.snaps[x.key]===x) delete pend.snaps[x.key]; });
+      bo.forEach(x=>{ if(pend.obs[x.id]===x) delete pend.obs[x.id]; });
+      savePend();
+    }
+    syncState="ok";
+  }catch(e){ syncState="не отправлено ("+e.message+"), повторю позже"; }
+  renderStatus();
+}
+function putSnap(s){ snaps[s.key]=s; if(s.h) queue("snaps",s); }
+function putObs(o){ obs[o.id]=o; saveLocal(); queue("obs",o); }
+
+// ---------- data ----------
+const qs=o=>Object.entries(o).map(([k,v])=>k+"="+encodeURIComponent(v)).join("&");
+async function getJSON(url,ms=15000){
+  const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(),ms);
+  try{ const r=await fetch(url,{signal:ctl.signal}); if(!r.ok){ let why=""; try{ why=(await r.json()).reason||""; }catch(e){} throw new Error(new URL(url).host+": HTTP "+r.status+(why?" — "+why:"")); } return await r.json(); }
+  finally{ clearTimeout(t); }
+}
+const PAST=40;
+async function fetchInputs(){
+  warns=[];
+  const common={timezone:TZ,past_days:PAST,forecast_days:7};
+  const mUrl=(vars,pd)=>"https://marine-api.open-meteo.com/v1/marine?"+qs({latitude:LOC.marine[0],longitude:LOC.marine[1],hourly:vars,timezone:TZ,past_days:pd,forecast_days:7});
+  const marine=getJSON(mUrl("wave_height,wave_period,wave_direction",PAST)).catch(e=>{ warns.push("волна: "+e.message); return getJSON(mUrl("wave_height,wave_period,wave_direction",3)).catch(()=>null); });
+  const extra =getJSON(mUrl("sea_surface_temperature,sea_level_height_msl,ocean_current_velocity",PAST)).catch(()=>null);
+  const coast =getJSON("https://api.open-meteo.com/v1/forecast?"+qs({latitude:LOC.coast[0],longitude:LOC.coast[1],hourly:"precipitation,wind_speed_10m,wind_direction_10m,cloud_cover,temperature_2m,uv_index",...common}));
+  const basin = !LOC.basin ? Promise.resolve(null) : getJSON("https://api.open-meteo.com/v1/forecast?"+qs({latitude:LOC.basin[0],longitude:LOC.basin[1],hourly:"precipitation",...common})).catch(e=>{ warns.push("бассейн реки: "+e.message); return null; });
+  const river = !LOC.river ? Promise.resolve(null) : getJSON("https://flood-api.open-meteo.com/v1/flood?"+qs({latitude:LOC.river[0],longitude:LOC.river[1],daily:"river_discharge,river_discharge_median",past_days:PAST,forecast_days:7})).catch(()=>null);
+  const upper = !LOC.upper ? Promise.resolve(null) : getJSON("https://api.open-meteo.com/v1/forecast?"+qs({latitude:LOC.upper.map(p=>p[0]).join(","),longitude:LOC.upper.map(p=>p[1]).join(","),hourly:"precipitation",...common})).catch(e=>{ warns.push("верховья реки: "+e.message); return null; });
+  const [m,x,c,b,r,u]=await Promise.all([marine,extra,coast,basin,river,upper]);
+  if(LOC.river && !(r&&r.daily&&r.daily.river_discharge&&r.daily.river_discharge.some(v=>v!=null))) warns.push("расход реки Кай: нет данных модели в этой точке — стратегия «Река Кай» не считается");
+  return {m,x,c,b,r,u:upAvg(u)};
+}
+// несколько точек → один ряд: среднее по точкам, где есть значение
+function upAvg(u){
+  const arr=Array.isArray(u)?u:(u?[u]:[]); if(!arr.length) return null;
+  const sum={},n={};
+  for(const o of arr){ if(!o||!o.hourly) continue; o.hourly.time.forEach((t,i)=>{ const v=o.hourly.precipitation[i]; if(v!=null){ sum[t]=(sum[t]||0)+v; n[t]=(n[t]||0)+1; } }); }
+  const time=Object.keys(sum).sort(); if(!time.length) return null;
+  return {hourly:{time, precipitation:time.map(t=>sum[t]/n[t])}};
+}
+function hmap(obj,key){ const m={}; if(obj&&obj.hourly&&obj.hourly[key]) obj.hourly.time.forEach((t,i)=>m[t]=obj.hourly[key][i]); return m; }
+function buildSnaps(inp){
+  const today=todayStr(), at=new Date().toISOString();
+  const H={ rainC:[hmap(inp.c,"precipitation"),r1], rainB:[hmap(inp.b,"precipitation"),r1], rainU:[hmap(inp.u,"precipitation"),r1], wspd:[hmap(inp.c,"wind_speed_10m"),r1],
+    wdir:[hmap(inp.c,"wind_direction_10m"),Math.round], cloud:[hmap(inp.c,"cloud_cover"),Math.round], temp:[hmap(inp.c,"temperature_2m"),r1], uv:[hmap(inp.c,"uv_index"),r1],
+    wave:[hmap(inp.m,"wave_height"),r2], wper:[hmap(inp.m,"wave_period"),r1], wvdir:[hmap(inp.m,"wave_direction"),Math.round],
+    sl:[hmap(inp.x,"sea_level_height_msl"),r2], sst:[hmap(inp.x,"sea_surface_temperature"),r1], cur:[hmap(inp.x,"ocean_current_velocity"),r1] };
+  const Q={},QM={};
+  if(inp.r&&inp.r.daily) inp.r.daily.time.forEach((t,i)=>{ Q[t]=inp.r.daily.river_discharge?.[i]; QM[t]=inp.r.daily.river_discharge_median?.[i]; });
+  const dsum=(m,d)=>{ let s=0,n=0; for(let h=0;h<24;h++){ const v=m[d+"T"+pad(h)+":00"]; if(v!=null){s+=v;n++;} } return n?r1(s):null; };
+  const out=[];
+  for(let k=-30;k<=6;k++){
+    const d=shift(today,k);
+    if(dsum(H.rainC[0],d)==null) continue;
+    const hours=[]; for(let i=H_FROM;i<24;i++){ const dd=i<0?shift(d,-1):d; hours.push(dd+"T"+pad((i+24)%24)+":00"); }
+    const h={};
+    for(const [name,[m,rnd]] of Object.entries(H)){ const arr=hours.map(t=>m[t]==null?null:rnd(m[t])); if(arr.some(v=>v!=null)) h[name]=arr; }
+    const dly={ rainC:[...Array(8)].map((_,i)=>dsum(H.rainC[0],shift(d,i-7))) };
+    if(Object.keys(H.rainB[0]).length) dly.rainB=[...Array(8)].map((_,i)=>dsum(H.rainB[0],shift(d,i-7)));
+    const q=Q[d]??Q[shift(d,-1)], qm=QM[d]??QM[shift(d,-1)];
+    if(q!=null){ dly.q=r1(q); dly.qmed=r1(qm); }
+    const q3=[3,2,1,0].map(j=>Q[shift(d,-j)]), qm3=[3,2,1,0].map(j=>QM[shift(d,-j)]);
+    if(q3.some(v=>v!=null)){ dly.qs=q3.map(v=>v==null?null:r1(v)); dly.qmeds=qm3.map(v=>v==null?null:r1(v)); }
+    if(Object.keys(H.rainU[0]).length) dly.rainU=[...Array(8)].map((_,i)=>dsum(H.rainU[0],shift(d,i-7)));
+    const an=k<0, issued=an?"an":today;
+    out.push({ key:LP()+d+"|"+issued, loc:LOC.id, target:d, issued, lead:an?null:k, schema:SCHEMA, at, v:at, h, dly, p:{} });
+  }
+  return out;
+}
+// новый снимок заменяет старый, только если данные изменились
+function ingest(list){
+  for(const s of list){
+    const cur=snaps[s.key];
+    if(cur && JSON.stringify([cur.h,cur.dly])===JSON.stringify([s.h,s.dly])) continue;
+    snaps[s.key]={...s, p:{}}; snaps[s.key]._dirty=true;
+  }
+}
+// все активные стратегии по всем снимкам; изменившиеся отправляются в синхронизацию
+function computeAll(){
+  const now=new Date().toISOString();
+  for(const s of Object.values(snaps)){
+    if(!s.h||!s.dly) continue;   // облегчённый снимок — пересчитать нечем
+    let changed=!!s._dirty; delete s._dirty;
+    const p={...(s.p||{})};
+    for(const st of computed()) for(const w of WINS){
+      let v=null; try{ v=st.compute(s,w,ctx); }catch(e){ v=null; }
+      v=r1(v); const k=pk(st.id,w.id);
+      if(p[k]!==v){ p[k]=v; changed=true; }
+    }
+    if(changed){ putSnap({...s, p, v:now}); }
+  }
+  saveLocal();
+}
+
+// ---------- selection & metrics ----------
+function byTarget(){ const m={}; for(const s of Object.values(snaps)) (m[s.target]||=[]).push(s); return m; }
+function pickSnap(list,ds){
+  if(!list) return null;
+  const fc=list.filter(s=>s.issued!=="an" && s.issued<=ds).sort((a,b)=>b.issued.localeCompare(a.issued));
+  return fc[0] || list.find(s=>s.issued==="an") || null;
+}
+function bucketOf(s){ return s.issued==="an"?"an":s.lead===0?"L0":s.lead<=2?"L12":"L36"; }
+function metrics(){
+  const M={}, bt=byTarget();
+  for(const o of Object.values(obs)){
+    if(o.deleted||!(o.actual>0)||!o.win) continue;
+    for(const s of (bt[o.date]||[])){
+      const b=bucketOf(s);
+      for(const [k,v] of Object.entries(s.p||{})){
+        if(v==null) continue;
+        const [id,w]=k.split("@"); if(w!==o.win) continue;
+        const x=((M[id]||={})[b]||={n:0,abs:0,err:0,hit:0}), e=v-o.actual;
+        x.n++; x.abs+=Math.abs(e); x.err+=e; if(Math.abs(e)<=Math.max(0.5,o.actual*0.3)) x.hit++;
+      }
+    }
+    // v3.6: «ближе всех» — по снимку, который показывался на этот день (как в таблице)
+    const s=pickSnap(bt[o.date],o.date); if(!s||!s.p) continue;
+    const L=computed().map(st=>[st.id,s.p[pk(st.id,o.win)]]).filter(([,v])=>v!=null).map(([id,v])=>[id,Math.abs(v-o.actual)]);
+    if(L.length<2) continue;
+    const best=Math.min(...L.map(x=>x[1]));
+    for(const [id,e] of L){ const x=((M[id]||={}).win||={n:0,best:0}); x.n++; if(e-best<0.05) x.best++; }
+  }
+  return M;
+}
+function primaryId(M){
+  if(prefs.primary!=="auto" && SMAP[prefs.primary] && SMAP[prefs.primary].status!=="archived") return prefs.primary;
+  for(const b of ["L12","an"]){
+    const c=active().map(s=>[s.id,M[s.id]?.[b]]).filter(([,x])=>x&&x.n>=5).sort((a,b)=>a[1].abs/a[1].n-b[1].abs/b[1].n);
+    if(c.length) return c[0][0];
+  }
+  return DEFAULT_PRIMARY;
+}
+
+// ---------- render ----------
+function gaugeSVG(v,lo,hi){
+  const H=320, top=10, max=12, y=m=>top+clamp(m,0,max)/max*(H-top-20);
+  let ticks=""; for(let m=0;m<=max;m+=2) ticks+=`<line x1="78" x2="88" y1="${y(m)}" y2="${y(m)}" stroke="currentColor" opacity=".5"/><text x="92" y="${y(m)+4}" font-size="11" fill="currentColor" opacity=".7">${m}</text>`;
+  const dy=v==null?null:y(v);
+  return `<svg viewBox="0 0 110 ${H}" style="color:var(--muted)"><defs><linearGradient id="wg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--shallow)"/><stop offset="1" stop-color="var(--deep)"/></linearGradient></defs>
+    <rect x="8" y="${top}" width="66" height="${H-top-20}" rx="10" fill="url(#wg)"/>
+    ${v!=null?`<rect x="8" y="${y(lo)}" width="66" height="${Math.max(2,y(hi)-y(lo))}" fill="#fff" opacity=".14"/>
+    <line x1="41" x2="41" y1="${top}" y2="${dy}" stroke="#fff" stroke-width="1.5" stroke-dasharray="3 3" opacity=".8"/>
+    <g transform="translate(41 ${dy})"><circle r="17" fill="var(--disk)"/><path d="M0 0 L17 0 A17 17 0 0 1 0 17 Z" fill="var(--diskInk)"/><path d="M0 0 L-17 0 A17 17 0 0 1 0 -17 Z" fill="var(--diskInk)"/></g>`:""}
+    ${ticks}<text x="92" y="${H-4}" font-size="10" fill="currentColor" opacity=".7">м</text></svg>`;
+}
+const UVN=["низкий","умеренный","высокий","очень высокий","экстремальный"];
+const uvCat=u=>u<3?0:u<6?1:u<8?2:u<11?3:4;
+const hm=h=>pad(h)+":00";
+function tideTxt(t){ if(!t) return ""; return `${t.dir>0?"↑ прилив":t.dir<0?"↓ отлив":"→ стоит"} ${sgn(t.from)} → ${sgn(t.to)} м`; }
+function curWin(){ const h=+new Intl.DateTimeFormat("en-GB",{timeZone:TZ,hour:"2-digit",hourCycle:"h23"}).format(new Date()); return h<13?"am":"pm"; }
+// v3.7: день в верхней части листается кнопками «‹ Вчера» / «Завтра ›» (−30…+6 дней), «Сегодня» — назад к сегодня
+let dayOff=0; const DAY_MIN=-30, DAY_MAX=6;
+function heroSnap(bt,ds,today){ const L=bt[ds]; if(!L) return null; if(ds<today){ const an=L.find(x=>x.issued==="an"); if(an) return an; } return pickSnap(L,ds); }
+function dayWord(off,ds){ return off===0?"Сегодня":off===-1?"Вчера":off===1?"Завтра":dayName(ds).replace(/^./,c=>c.toUpperCase()); }
+function renderHero(P,bt){
+  const today=todayStr(), day=shift(today,dayOff), s=heroSnap(bt,day,today), st=SMAP[P], cw=dayOff===0?curWin():"am";
+  const nb=o=>o===0?"Сегодня":o===-1?"Вчера":o===1?"Завтра":dateShort(shift(today,o));
+  $("dPrev").disabled=dayOff<=DAY_MIN; $("dNext").disabled=dayOff>=DAY_MAX; $("dToday").hidden=Math.abs(dayOff)<=1;
+  $("dPrev").textContent="‹ "+nb(dayOff-1); $("dNext").textContent=nb(dayOff+1)+" ›";
+  $("heroDate").textContent=`${dayWord(dayOff,day)}, ${dateRu(day)} · ${st?st.name:P}`+(day<today&&s&&s.issued==="an"?" · по фактической погоде":"")+(LOC.id!=="nhatrang"?" · норма и коэффициенты нячангские, река не учитывается":"");
+  let gv=null;
+  $("wins").innerHTML=WINS.map(w=>{
+    let v=s&&s.p?s.p[pk(P,w.id)]:null, note="";
+    if(v==null){ v=seasonBase(day); note=" (сезонная норма)"; }
+    const fo=obsFor(day,w.id);
+    if(w.id===cw) gv=v;
+    const x=s&&s.h?wx(s,w):{};
+    const uv=x.uv!=null?`<div class="uv uv${uvCat(x.uv)}"><b>${fmt(x.uv)}</b><span>УФ, ${UVN[uvCat(x.uv)]}</span></div>`:"";
+    const others=active().filter(a=>a.id!==P).map(a=>`<span>${esc(a.name)}: <b>${s&&s.p&&s.p[pk(a.id,w.id)]!=null?fmt(s.p[pk(a.id,w.id)])+" м":"—"}</b></span>`).join("");
+    return `<div class="win ${w.id} ${w.id===cw?"now":""}"><div class="wl">${w.name} ${w.label}</div>
+      <p class="big" data-alt="${tipKey(altHTML(s,w.id,P,w.name+" "+w.label))}">${fmt(v)}<small>м</small></p>
+      <p class="verdict">${verdictFor(v)}</p>
+      <p class="range">от ${fmt(v*0.7)} до ${fmt(v*1.3)} м${note}</p>
+      ${fo?`<p class="factv">Факт: <b>${fmt(fo.actual)} м</b> (${sgn(fo.actual-v)})${fo.time?", "+esc(fo.time):""}</p>`:""}
+      <div class="wx"><div><b>${x.sst!=null?Math.round(x.sst)+"°":"—"}</b><span>вода</span></div><div><b>${x.air!=null?Math.round(x.air)+"°":"—"}</b><span>воздух</span></div>${uv}</div>
+      <div class="tide">${tideTxt(x.tide)}</div>
+      <div class="others">${others}</div></div>`;
+  }).join("");
+  $("gauge").innerHTML=gaugeSVG(gv,gv*0.7,gv*1.3);
+  const ex=s&&s.h?tideExtremes(s):[];
+  $("tideday").textContent = ex.length ? (dayOff===0?"Прилив сегодня: ":"Прилив в этот день: ")+ex.map(e=>`${e.hi?"полная вода":"малая вода"} ${hm(e.h)} (${sgn(e.v)} м)`).join(", ")+". Уровень относительно среднего уровня моря, модель." : "";
+  const fl=$("factors"); fl.innerHTML="";
+  if(s && s.h && st && st.explain){ for(const [name,mult,detail] of st.explain(s,WMAP[cw])){ const loss=Math.round((1-mult)*100); const li=document.createElement("li");
+    li.innerHTML=`<span>${name}</span><span class="bar" title="${esc(detail)}"><i style="width:${clamp(loss,0,100)}%"></i></span><span class="val">${loss>0?"−"+loss+"%":"0"}</span>`; fl.appendChild(li); } }
+}
+function renderDays(P,bt){
+  const today=todayStr(), A=[...active(), ...(SMAP[P]&&SMAP[P].status==="shadow"?[SMAP[P]]:[])];
+  $("daysHead").innerHTML=`<tr><th>Дата</th><th>Окно</th><th>Прилив,<br>м</th><th>Факт,<br>м</th>${A.map(s=>`<th class="${s.id===P?"prim":""}">${esc(s.name).replace(" ","<br>")}</th>`).join("")}<th>Дождь,<br>мм</th><th>Волна,<br>м</th><th>Ветер,<br>км/ч</th><th>Вода/<br>возд.</th><th>УФ</th></tr>`;
+  const tb=$("daysBody"); tb.innerHTML="";
+  const dates=[...new Set([...Object.keys(bt),...Object.values(obs).filter(o=>!o.deleted&&o.win).map(o=>o.date)])].sort().reverse().slice(0,120);
+  if(!dates.length){ tb.innerHTML=`<tr><td colspan="${A.length+9}" class="empty">Данные загружаются…</td></tr>`; return; }
+  for(const ds of dates){
+    const s=pickSnap(bt[ds],ds), future=ds>today;
+    WINS.forEach((w,wi)=>{
+      const o=obsFor(ds,w.id), f=s&&s.h?featW(s,w):{}, x=s&&s.h?wx(s,w):{};
+      const tr=document.createElement("tr");
+      tr.className=[future?"is-future":"", "w-"+w.id].join(" ");
+      const cells=A.map(st=>{
+        const v=s&&s.p?s.p[pk(st.id,w.id)]:null;
+        let e=""; if(v!=null&&o){ const d=v-o.actual; e=`<span class="e ${Math.abs(d)<=Math.max(0.5,o.actual*0.3)?"good":"bad"}">${sgn(d)}</span>`; }
+        return `<td class="num ${st.id===P?"prim":""}" data-alt="${tipKey(altHTML(s,w.id,P,dateShort(ds)+", "+w.name.toLowerCase()))}">${st.id===P?"<b>":""}${v!=null?fmt(v):"—"}${s&&s.issued==="an"&&v!=null?"*":""}${st.id===P?"</b>":""}${e}</td>`;
+      }).join("");
+      tr.innerHTML=(wi===0?`<td class="dcell ${ds===today?"today":""}" rowspan="${WINS.length}">${dayName(ds)}<br>${dateShort(ds)}${ds===today?"<br>сегодня":""}</td>`:"")+
+        `<td class="wcell">${w.name}<span>${w.label}</span></td>
+        <td class="num"><b>${x.tide?(x.tide.dir>0?"↑ ":x.tide.dir<0?"↓ ":"→ ")+sgn(x.tide.to):""}</b></td>
+        <td class="num factcell"></td>${cells}
+        <td class="num">${wi===0&&f.rainW!=null?fmt(f.rainW):""}</td><td class="num">${f.waveMax!=null?fmt(f.waveMax):""}</td>
+        <td class="num">${f.windMean!=null?Math.round(f.windMean)+(f.onshore?" ↘":""):""}</td>
+        <td class="num">${x.sst!=null?Math.round(x.sst)+"°":"—"}/${x.air!=null?Math.round(x.air)+"°":"—"}</td>
+        <td class="num">${x.uv!=null?Math.round(x.uv):""}</td>`;
+      if(!future){
+        const inp=document.createElement("input"); inp.className="fact"+(o?" set":""); inp.inputMode="decimal"; inp.placeholder="м / ±";
+        inp.value=o?fmt(o.actual):""; inp.setAttribute("aria-label",`Факт ${w.name.toLowerCase()} ${dateRu(ds)}`);
+        inp.title=o?`${o.place||""}${o.method?", "+o.method:""}${o.time?", "+o.time:""}`:"";
+        inp.addEventListener("change",()=>saveFact(ds,w.id,inp.value,s&&s.p?s.p[pk(P,w.id)]:null,P));
+        inp.addEventListener("keydown",e=>{ if(e.key==="Enter") inp.blur(); });
+        tr.querySelector(".factcell").appendChild(inp);
+      }
+      tb.appendChild(tr);
+    });
+  }
+}
+function cellM(x){ if(!x||!x.n) return `<span class="hint">—</span>`; return `${fmt(x.abs/x.n)} / ${sgn(x.err/x.n)} / ${x.n}`; }
+function renderStrats(P,M){
+  const sel=$("primSel"), autoId=(()=>{ const sv=prefs.primary; prefs.primary="auto"; const a=primaryId(M); prefs.primary=sv; return a; })();
+  sel.innerHTML=`<option value="auto">Авто — лучшая (сейчас ${esc(SMAP[autoId]?.name||autoId)})</option>`+computed().map(s=>`<option value="${s.id}">${esc(s.name)}${s.status==="shadow"?" (фон)":""}</option>`).join("");
+  sel.value=SMAP[prefs.primary]&&SMAP[prefs.primary].status!=="archived"?prefs.primary:"auto";
+  const known=new Set([...STRATEGIES.map(s=>s.id),...Object.keys(M)]);
+  $("stratsBody").innerHTML=[...known].map(id=>{
+    const st=SMAP[id]||{id,name:id,status:"archived",desc:"Удалена из кода, осталась история.",data:""};
+    const m=M[id]||{};
+    return `<tr class="${st.status==="archived"?"st-arch":""}"><td class="st-name"><b>${esc(st.name)}${id===P?" ★":""}</b><code>${esc(id)}${st.status==="shadow"?" · фон":st.status!=="active"?" · архив":""}</code></td>
+      <td class="desc">${esc(st.desc)}<span class="data">Данные: ${esc(st.data)}</span></td>
+      <td class="num">${cellM(m.an)}</td><td class="num">${cellM(m.L0)}</td><td class="num">${cellM(m.L12)}</td><td class="num">${cellM(m.L36)}</td>
+      <td class="num">${m.win&&m.win.n?`${m.win.best} из ${m.win.n}`:'<span class="hint">—</span>'}</td></tr>`;
+  }).join("");
+}
+function renderStatus(){
+  const np=Object.keys(pend.snaps).length+Object.keys(pend.obs).length;
+  const st= sync ? "синхронизация: "+(syncState||"…")+(np&&syncState!=="ok"?`, в очереди ${np}`:"") : "лог только в этом браузере";
+  $("status").innerHTML=`<b>${esc(srcLabel)}</b> · ${esc(st)}`;
+  $("syncLink").hidden=!sync;
+}
+function renderAll(){
+  tipData=new Map();
+  const M=metrics(), P=primaryId(M), bt=byTarget();
+  renderHero(P,bt); renderDays(P,bt); renderStrats(P,M); renderStatus();
+  const n=Object.values(obs).filter(o=>!o.deleted&&o.actual>0&&o.win).length;
+  const w=n%10===1&&n%100!==11?"наблюдение":(n%10>=2&&n%10<=4&&(n%100<12||n%100>14))?"наблюдения":"наблюдений";
+  $("stats").textContent=n?`${n} ${w}`:"";
+  postSummary(P,bt);
+}
+
+// v3.2–3.5: если страница во фрейме — отдать родителю прогноз на ближайшее окно (для значка на его главной).
+// Ближайшее: до 10:00 — сегодня утро, до 18:00 — сегодня вечер, позже — завтра утро. Модель не меняется.
+function postSummary(P,bt){
+  if(window.parent===window) return;
+  const h=+new Intl.DateTimeFormat("en-GB",{timeZone:TZ,hour:"2-digit",hourCycle:"h23"}).format(new Date());
+  const today=todayStr(); let ds=today, w;
+  if(h<10) w="am"; else if(h<18) w="pm"; else { ds=shift(today,1); w="am"; }
+  const s=pickSnap(bt[ds],ds); let v=s&&s.p?s.p[pk(P,w)]:null, norm=false;
+  if(v==null){ v=seasonBase(ds); norm=true; }
+  // v3.3: погода того же окна — воздух, вода, УФ (макс.), прилив (уровень в начале и конце окна)
+  const x=s&&s.h?wx(s,WMAP[w]):{}, f=s&&s.h?featW(s,WMAP[w]):{};   // v3.4: + ветер окна (средний, км/ч; откуда; с моря)
+  const tide=x.tide?{from:r2(x.tide.from), to:r2(x.tide.to), delta:r2(x.tide.to-x.tide.from), dir:x.tide.dir}:null;
+  try{ window.parent.postMessage({type:"clarity", v:r1(v), verdict:verdictFor(v), date:ds, today:ds===today,
+    air:x.air!=null?Math.round(x.air):null, sst:x.sst!=null?Math.round(x.sst):null, uv:x.uv!=null?r1(x.uv):null, tide,
+    wind:f.windMean!=null?r1(f.windMean):null, windDir:f.windDir!=null?Math.round(f.windDir):null, onshore:!!f.onshore,
+    alts:altList(s,w,P).map(a=>({name:a.name,v:a.v,prim:a.id===P,shadow:a.shadow})),
+    win:w, winName:WMAP[w].name, label:WMAP[w].label, loc:LOC.name, locId:LOC.id, strategy:(SMAP[P]||{}).name||P, norm,
+    src:srcLabel, at:new Date().toISOString()}, "*"); }catch(e){}
+}
+
+// ---------- fact entry ----------
+function saveFact(ds,win,raw,primVal,P,opt){
+  opt=opt||{}; const fail=m=>{ if(!opt.quiet) toast(m); renderAll(); return {ok:false,error:m}; };
+  const t=String(raw).trim().replace(",",".").replace("−","-");
+  const id=oid(ds,win), prev=obs[id], now=new Date().toISOString();
+  if(!t){ if(prev&&!prev.deleted){ putObs({...prev,deleted:true,updated:now}); computeAll(); renderAll(); } return {ok:true,actual:null}; }
+  let actual, ref=null;
+  if(/^[+-]/.test(t)){
+    const d=parseFloat(t); if(isNaN(d)) return fail("Не понял число");
+    if(primVal==null) return fail("Нет прогноза на это окно — введи метры");
+    actual=primVal+d; ref={strategy:P,value:primVal,input:t};
+  } else actual=parseFloat(t);
+  if(!(actual>0&&actual<=40)) return fail("Видимость должна быть от 0 до 40 м");
+  const sn=pickSnap(byTarget()[ds],ds), pred={};
+  if(sn&&sn.p) for(const st of computed()){ const v=sn.p[pk(st.id,win)]; if(v!=null) pred[st.id]=v; }
+  const o={ id, loc:LOC.id, date:ds, win, actual:r1(actual), ref, pred, predSnap:sn?sn.key:null, place:prefs.place, method:prefs.method,
+    time: opt.time || (ds===todayStr()?nowHM():(prev&&prev.time||null)), ...(opt.src?{src:opt.src}:{}),
+    created: prev?prev.created:now, updated:now, deleted:false, schema:SCHEMA };
+  putObs(o); computeAll(); renderAll();
+  return {ok:true, actual:o.actual};
+}
+// v3.7: замер из «Навигатора заплыва» без перехода на страницу:
+//   {type:"clarity-fact", id, date, win:"am"|"pm", value:"3"|"+1"|"" (пусто — удалить), time:"09:00"}
+//   {type:"clarity-get-fact", id, date, win} — узнать текущий замер
+// ответ родителю: {type:"clarity-fact-ack", id, date, win, ok, actual, error, locId}
+if(window.parent!==window) window.addEventListener("message",e=>{
+  const d=e.data; if(!d||e.source!==window.parent) return;
+  if(d.type!=="clarity-fact"&&d.type!=="clarity-get-fact") return;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(d.date||"")||!WMAP[d.win]) return;
+  let r;
+  if(d.type==="clarity-get-fact"){ const o=obsFor(d.date,d.win); r={ok:true,actual:o?o.actual:null}; }
+  else{
+    const M=metrics(), P=primaryId(M), sn=pickSnap(byTarget()[d.date],d.date);
+    r=saveFact(d.date,d.win,d.value==null?"":String(d.value),sn&&sn.p?sn.p[pk(P,d.win)]:null,P,{quiet:true,time:d.time||null,src:"swim"});
+  }
+  try{ window.parent.postMessage({type:"clarity-fact-ack",id:d.id,date:d.date,win:d.win,locId:LOC.id,...r},"*"); }catch(err){}
+});
+
+// ---------- export / import ----------
+function exportLog(){
+  const data=JSON.stringify({exported:new Date().toISOString(), schema:SCHEMA, location:LOC,
+    windows:WINS, strategies:STRATEGIES.map(({id,name,status,desc,data})=>({id,name,status,desc,data})),
+    snaps:Object.values(snaps), obs:Object.values(obs)});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([data],{type:"application/json"}));
+  a.download=`nhatrang-clarity-${todayStr()}.json`; document.body.appendChild(a); a.click(); a.remove();
+}
+async function importLog(file){
+  try{
+    const j=JSON.parse(await file.text()); let ns=0,no=0;
+    for(const s of (j.snaps||[])){ if(!s||!s.key) continue; const m=merged(snaps[s.key],s); if(m!==snaps[s.key]){ putSnap(m); ns++; } }
+    for(const o of (j.obs||[])){ if(!o||!o.id) continue; const m=merged(obs[o.id],o); if(m!==obs[o.id]){ obs[o.id]=m; queue("obs",m); no++; } }
+    computeAll(); toast(`Загружено: ${ns} снимков, ${no} наблюдений`); renderAll();
+  }catch(e){ toast("Не получилось прочитать файл: "+e.message); }
+}
+function setupSync(){
+  const url=prompt("Адрес веб-приложения Apps Script (…/exec). Пусто — отключить синхронизацию:", sync?sync.url:"");
+  if(url===null) return;
+  if(!url.trim()){ sync=null; localStorage.removeItem(SYNC_KEY); renderAll(); return; }
+  const key=prompt("Ключ (слово KEY из скрипта):", sync?sync.key:""); if(!key) return;
+  setSync(url.trim(),key.trim()); syncState="…"; renderAll();
+  pull().then(()=>{ computeAll(); renderAll(); return flush(); });
+}
+async function copySyncLink(){
+  if(!sync) return;
+  const link=HOST.location.origin+HOST.location.pathname+"#sync="+encodeURIComponent(sync.url)+"&key="+encodeURIComponent(sync.key);
+  try{ await navigator.clipboard.writeText(link); toast("Ссылка скопирована — открой её на другом устройстве"); }
+  catch(e){ prompt("Скопируй ссылку и открой на другом устройстве:", link); }
+}
+
+// ---------- refresh ----------
+async function refresh(){
+  srcLabel="Получаю данные…"; renderStatus();
+  try{
+    const inp=await fetchInputs();
+    ingest(buildSnaps(inp));
+    srcLabel="Open-Meteo, обновлено "+nowHM();
+    msg(warns.join("; "));
+  }catch(e){
+    srcLabel="Нет живых данных — показаны сохранённые";
+    msg("Обновление не удалось: "+e.message);
+  }
+  computeAll(); renderAll();
+}
+
+// ---------- location ----------
+function places(){ return [NHATRANG, ...(prefs.places||[])]; }
+// v3.5: во фрейме «Навигатора заплыва» место задаёт он (window.parent.SWIM_CLARITY_LOC = {id,name,lat,lng});
+// свой выбор места скрыт. Нячанг — полная настройка; остальные — одна точка, без реки (как найденные поиском).
+const EMB=(()=>{ if(window.parent===window) return null; try{ return window.parent.SWIM_CLARITY_LOC||null; }catch(e){ return null; } })();
+function applyLoc(){
+  if(EMB){
+    LOC = EMB.id==="nhatrang" ? NHATRANG : {id:EMB.id, name:EMB.name, marine:[EMB.lat,EMB.lng], coast:[EMB.lat,EMB.lng], basin:null, river:null};
+    LS = LOC.id==="nhatrang" ? "ntClarity.v2" : "ntClarity.v2."+LOC.id;
+    document.title="Прозрачность воды — "+LOC.name;
+    return;
+  }
+  const id=prefs.loc||"nhatrang";
+  LOC = places().find(p=>p.id===id) || NHATRANG;
+  LS = LOC.id==="nhatrang" ? "ntClarity.v2" : "ntClarity.v2."+LOC.id;
+  document.title="Прозрачность воды — "+LOC.name;
+}
+function renderLocSel(){
+  const sel=$("locSel");
+  if(EMB){ sel.outerHTML=`<b style="font:600 1.05rem/1.3 Onest,'Segoe UI',sans-serif">${esc(LOC.name)}</b>`; return; }
+  sel.innerHTML=places().map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join("")+`<option value="__find">Другое место…</option>`+
+    (LOC.id!=="nhatrang"?`<option value="__del">Убрать «${esc(LOC.name)}» из списка</option>`:"");
+  sel.value=LOC.id;
+}
+function switchLoc(id){ prefs.loc=id; savePrefs(); location.hash=""; location.reload(); }
+let findT=null;
+async function findPlace(q){
+  const box=$("locRes"); if(q.trim().length<2){ box.innerHTML=""; return; }
+  try{
+    const j=await getJSON("https://geocoding-api.open-meteo.com/v1/search?"+qs({name:q.trim(),count:6,language:"ru",format:"json"}));
+    const r=j.results||[];
+    box.innerHTML=r.length?"":`<span class="hint">Ничего не найдено</span>`;
+    r.forEach(g=>{ const b=document.createElement("button"); b.type="button";
+      b.textContent=[g.name,g.admin1,g.country].filter(Boolean).join(", ");
+      b.onclick=()=>{ const p={id:"g"+g.id, name:g.name+(g.country_code?" ("+g.country_code+")":""), marine:[g.latitude,g.longitude], coast:[g.latitude,g.longitude], basin:null, river:null};
+        prefs.places=[...(prefs.places||[]).filter(x=>x.id!==p.id), p]; switchLoc(p.id); };
+      box.appendChild(b); });
+  }catch(e){ box.innerHTML=`<span class="hint">Поиск не удался: ${esc(e.message)}</span>`; }
+}
+if(!EMB) $("locSel").onchange=e=>{
+  const v=e.target.value;
+  if(v==="__find"){ $("locFind").hidden=false; $("locQ").focus(); e.target.value=LOC.id; return; }
+  if(v==="__del"){ prefs.places=(prefs.places||[]).filter(x=>x.id!==LOC.id); switchLoc("nhatrang"); return; }
+  switchLoc(v);
+};
+$("locQ").oninput=e=>{ clearTimeout(findT); findT=setTimeout(()=>findPlace(e.target.value),350); };
+$("locCancel").onclick=()=>{ $("locFind").hidden=true; $("locQ").value=""; $("locRes").innerHTML=""; };
+
+// ---------- init ----------
+setupTip();
+try{ Object.assign(prefs, JSON.parse(localStorage.getItem(PREF_KEY)||"{}")); }catch(e){}
+applyLoc(); renderLocSel();
+loadLocal();
+if(HOST.location.hash.startsWith("#sync=")){
+  const h=new URLSearchParams(HOST.location.hash.slice(1));
+  if(h.get("sync")&&h.get("key")) setSync(h.get("sync"),h.get("key"));
+  HOST.history.replaceState(null,"",HOST.location.pathname+HOST.location.search);
+}
+$("pPlace").value=prefs.place; $("pMethod").value=prefs.method;
+$("pPlace").onchange=e=>{ prefs.place=e.target.value; savePrefs(); };
+$("pMethod").onchange=e=>{ prefs.method=e.target.value; savePrefs(); };
+$("dPrev").onclick=()=>{ dayOff=Math.max(DAY_MIN,dayOff-1); renderAll(); };
+$("dNext").onclick=()=>{ dayOff=Math.min(DAY_MAX,dayOff+1); renderAll(); };
+$("dToday").onclick=()=>{ dayOff=0; renderAll(); };
+$("primSel").onchange=e=>{ prefs.primary=e.target.value; savePrefs(); renderAll(); };
+$("syncBtn").onclick=setupSync;
+$("syncLink").onclick=copySyncLink;
+$("export").onclick=exportLog;
+$("importBtn").onclick=()=>$("import").click();
+$("import").onchange=e=>{ const f=e.target.files[0]; if(f) importLog(f); e.target.value=""; };
+renderAll();
+(async()=>{ await pull(); await refresh(); await flush(); })();
+})();
+</script>
+</body>
+</html>
