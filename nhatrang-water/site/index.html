@@ -411,10 +411,10 @@ const pk=(id,w)=>id+"@"+w;
 const LP=()=>LOC.id==="nhatrang"?"":LOC.id+":";   // префикс ключей для мест кроме Нячанга
 const oid=(ds,w)=>LP()+ds+"|"+w;
 const inLoc=x=>(x.loc||"nhatrang")===LOC.id;
-const obsFor=(ds,w)=>{ const o=obs[oid(ds,w)]; return o&&!o.deleted&&o.actual>0?o:null; };
+const obsFor=(ds,w)=>{ const o=obs[oid(ds,w)]; return o&&!o.deleted&&o.actual>=0?o:null; };
 
 const ctx={ lastObs(before,win){
-  const c=Object.values(obs).filter(o=>!o.deleted && o.win===win && o.actual>0 && o.date<before && ddiff(before,o.date)<=5).sort((a,b)=>b.date.localeCompare(a.date));
+  const c=Object.values(obs).filter(o=>!o.deleted && o.win===win && o.actual>=0 && o.date<before && ddiff(before,o.date)<=5).sort((a,b)=>b.date.localeCompare(a.date));
   return c.length?c[0].actual:null; } };
 
 // ---------- storage ----------
@@ -582,7 +582,7 @@ function bucketOf(s){ return s.issued==="an"?"an":s.lead===0?"L0":s.lead<=2?"L12
 function metrics(){
   const M={}, bt=byTarget();
   for(const o of Object.values(obs)){
-    if(o.deleted||!(o.actual>0)||!o.win) continue;
+    if(o.deleted||!(o.actual>=0)||!o.win) continue;
     for(const s of (bt[o.date]||[])){
       const b=bucketOf(s);
       for(const [k,v] of Object.entries(s.p||{})){
@@ -724,7 +724,7 @@ function renderAll(){
   tipData=new Map();
   const M=metrics(), P=primaryId(M), bt=byTarget();
   renderHero(P,bt); renderDays(P,bt); renderStrats(P,M); renderStatus();
-  const n=Object.values(obs).filter(o=>!o.deleted&&o.actual>0&&o.win).length;
+  const n=Object.values(obs).filter(o=>!o.deleted&&o.actual>=0&&o.win).length;
   const w=n%10===1&&n%100!==11?"наблюдение":(n%10>=2&&n%10<=4&&(n%100<12||n%100>14))?"наблюдения":"наблюдений";
   $("stats").textContent=n?`${n} ${w}`:"";
   postSummary(P,bt);
@@ -762,7 +762,7 @@ function saveFact(ds,win,raw,primVal,P,opt){
     if(primVal==null) return fail("Нет прогноза на это окно — введи метры");
     actual=primVal+d; ref={strategy:P,value:primVal,input:t};
   } else actual=parseFloat(t);
-  if(!(actual>0&&actual<=40)) return fail("Видимость должна быть от 0 до 40 м");
+  if(!(actual>=0&&actual<=40)) return fail("Видимость должна быть от 0 до 40 м");
   const sn=pickSnap(byTarget()[ds],ds), pred={};
   if(sn&&sn.p) for(const st of computed()){ const v=sn.p[pk(st.id,win)]; if(v!=null) pred[st.id]=v; }
   const o={ id, loc:LOC.id, date:ds, win, actual:r1(actual), ref, pred, predSnap:sn?sn.key:null, place:prefs.place, method:prefs.method,
