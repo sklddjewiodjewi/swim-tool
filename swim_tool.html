@@ -1440,7 +1440,9 @@ function calculate() {
     const distance = currentDistanceKm;
     const weight = num('weight');
     let wxm = { ok: false, why: '' };
-    if (isPlan() && distance > 0) {            // план: время считается само
+    // время: план на сегодня/прошлую дату — как факт («по» вводится, ⏱ по интервалу)
+    const tPlan = isPlan() && (val('swimDate') || todayStr()) > todayStr();
+    if (tPlan && distance > 0) {            // план: время считается само
         const vw = avgWaterKmh();
         wxm = windModel(null, vw);
         if (wxm.ok) {
@@ -1454,21 +1456,21 @@ function calculate() {
     } else $('timeH').setAttribute('title', 'Время заплыва, ч (дробью)');
     // факт: если задано «с … по …» — длительность из интервала (через полночь +24 ч)
     const tS = parseHM(val('startTime')), tE = parseHM(val('endTime'));
-    const byInterval = !isPlan() && tS != null && tE != null;
+    const byInterval = !tPlan && tS != null && tE != null;
     if (byInterval) {
         let d = tE - tS; if (d <= 0) d += 24;
         $('timeH').value = fmtH(d);
         $('timeH').setAttribute('title', `По интервалу ${val('startTime')}–${val('endTime')}`);
     }
     // план: «по» = старт + расчётное время
-    if (isPlan() && tS != null) {
+    if (tPlan && tS != null) {
         const e = (tS + num('timeH')) % 24, hh = Math.floor(e), mm = Math.round((e - hh) * 60) % 60;
         $('endTime').value = `${String(hh + (Math.round((e - hh) * 60) === 60 ? 1 : 0)).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
     }
-    $('endTime').readOnly = isPlan();
-    $('endTime').style.background = isPlan() ? '#f3e5f5' : '';
-    $('timeH').readOnly = isPlan() || byInterval;
-    $('timeH').style.background = isPlan() ? '#f3e5f5' : byInterval ? '#eceff1' : '';
+    $('endTime').readOnly = tPlan;
+    $('endTime').style.background = tPlan ? '#f3e5f5' : '';
+    $('timeH').readOnly = tPlan || byInterval;
+    $('timeH').style.background = tPlan ? '#f3e5f5' : byInterval ? '#eceff1' : '';
     const totalHours = num('timeH');
     const water = val('water');
 
