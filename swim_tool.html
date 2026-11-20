@@ -123,8 +123,6 @@
         #feelSt { font-size: 12px; color: #666; }
         .grp { display: inline-flex; align-items: center; gap: 4px; }
         .mOnly { display: none !important; }
-        #syncBtn.ok { border-color: #2e7d32; } #syncBtn.err { border-color: #c62828; background: #ffebee; } #syncBtn.ro { border-color: #9e9e9e; }
-        #syncBtn.busy { opacity: 0.6; }
         /* ===== Телефон (узкий экран): карта на весь экран, главное — в нижней панели, остальное — ⚙️ и 📋 ===== */
         body.m { flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; --ctl-h: 40px; }
         body.m input, body.m select, body.m button { font-size: 16px; }   /* 16px — браузер не увеличивает страницу при вводе */
@@ -229,7 +227,6 @@
             <button class="light" onclick="document.getElementById('importFile').click()" title="Импорт истории из JSON">⬆️</button>
             <input type="file" id="importFile" accept=".json" style="display:none" onchange="importHistory(this)">
             <button class="light" onclick="exportDebug()" title="Скачать лог для разбора ошибок (лог + текущие значения + история)">🐞</button>
-            <button class="light" id="syncBtn" onclick="syncSetup()" title="Синхронизация истории через репозиторий">☁️</button>
             <button class="light mOnly" onclick="mPanel(null)" title="Закрыть">✕</button>
         </div>
         <div id="historyTable"></div>
@@ -351,7 +348,7 @@ function exportDebug() {
 
 // ================= ХРАНЕНИЕ =================
 const STORE_STATE = 'swim.state.v1';    // последние значения + маршрут
-const STORE_HIST  = 'swim.history.v1';  // записи истории
+const STORE_HIST  = 'swim.history.v1';  // старая версия: история в браузере (переносится в общую и удаляется)
 const STORE_COAST = 'swim.coast.v1';    // кэш береговой линии OSM
 
 function lsGet(key, def) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; } catch (e) { return def; } }
@@ -1640,6 +1637,8 @@ function updateRecordUI() {
     if (!rec) st.innerText = '✏️ черновик — не сохранено';
     else if (lastSavedAt) st.innerText = `💾 ${fmtDate(rec.date)} ${String(lastSavedAt.getHours()).padStart(2,'0')}:${String(lastSavedAt.getMinutes()).padStart(2,'0')}`;
     else st.innerText = `💾 ${fmtDate(rec.date)}`;
+    if (histErr) st.innerText += ' ⚠️';
+    st.title = histErr;
 }
 
 // ================= ИСТОРИЯ =================
@@ -1658,12 +1657,14 @@ function uniqByDate(h) {
         if (!o || (r.savedAt || '') >= (o.savedAt || '')) by[r.date] = r; });
     return Object.values(by);
 }
-function getHistory() { return uniqByDate(lsGet(STORE_HIST, [])).sort((a, b) => b.date.localeCompare(a.date)); }
+// История — только в памяти страницы (копия при чтении, чтобы правки записей не меняли её тайком); источник — общая история.
+let histMem = [];
+function getHistory() { return JSON.parse(JSON.stringify(histMem)); }
 function setHistory(h) {
     const old = syncApplying ? null : getHistory();
     h = uniqByDate(h);
-    h.sort((a, b) => b.date.localeCompare(a.date)); lsSet(STORE_HIST, h); renderHistory();
-    if (old) noteSyncOps(old, h);
+    h.sort((a, b) => b.date.localeCompare(a.date)); histMem = JSON.parse(JSON.stringify(h)); renderHistory();
+    if (old) { const ops = histOps(old, h); if (ops.length) histSend(ops); }
 }
 
 // Подставить значения записи в поля и карту (без смены даты). false — записи нет.
@@ -2052,105 +2053,67 @@ window.addEventListener('pagehide', () => { try { leaveDate(); } catch (e) {} })
 })();
 
 
-// ================= СИНХРОНИЗАЦИЯ ИСТОРИИ ЧЕРЕЗ РЕПОЗИТОРИЙ =================
-// Одна история на все устройства: файл data/history.json в репозитории GitHub (он же отдаётся сайтом GitHub Pages).
-// Чтение — без ключа (файл сайта). Запись — через GitHub API с ключом (fine-grained token, Contents: read/write,
-// только репозиторий swim-tool). Ключ вводится один раз на устройстве (☁️), хранится только в браузере, в файлы не попадает.
-// Локальные изменения копятся как операции по датам (запись / удаление) и накладываются на свежую версию файла —
-// так правки с разных устройств не затирают друг друга.
-const STORE_GH = 'swim.gh.v1', STORE_OPS = 'swim.syncOps.v1', STORE_SYNCINIT = 'swim.syncInit.v1';
-const GH = { owner: 'sklddjewiodjewi', repo: 'swim-tool', path: 'data/history.json', branch: 'main' };
-let ghToken = (lsGet(STORE_GH, {}) || {}).token || '';
-let syncApplying = false, syncBusy = false, syncAgain = false, syncTimer = null, syncedOnce = false;
+// ================= ОБЩАЯ ИСТОРИЯ (GOOGLE ТАБЛИЦА) =================
+// История одна на все устройства — в Google Таблице, через веб-приложение Apps Script (history-apps-script.gs), без ключа.
+// На устройстве копии нет: история только в памяти страницы. Читается при открытии и при возврате на вкладку,
+// каждое изменение сразу отправляется. Не отправилось — изменение не сохранено (⚠️ у 💾), показывается общая история.
+// Пока адрес скрипта не задан — только чтение data/history.json с сайта.
+const HIST_URL = ''; // адрес веб-приложения Apps Script (…/exec)
+let histQueue = Promise.resolve(), histErr = '', syncApplying = false;
 
-function noteSyncOps(oldH, newH) {
-    const ops = lsGet(STORE_OPS, {}), o = {}, n = {};
+function histOps(oldH, newH) {
+    const o = {}, n = {}, ops = [];
     oldH.forEach(r => o[r.date] = JSON.stringify(r));
     newH.forEach(r => n[r.date] = JSON.stringify(r));
-    let changed = 0;
-    Object.keys(n).forEach(d => { if (n[d] !== o[d]) { ops[d] = { rec: JSON.parse(n[d]) }; changed++; } });
-    Object.keys(o).forEach(d => { if (!(d in n)) { ops[d] = { del: true }; changed++; } });
-    if (!changed) return;
-    lsSet(STORE_OPS, ops);
-    clearTimeout(syncTimer); syncTimer = setTimeout(syncNow, 2500);
-    setSyncUI();
+    Object.keys(n).forEach(d => { if (n[d] !== o[d]) ops.push({ date: d, rec: JSON.parse(n[d]) }); });
+    Object.keys(o).forEach(d => { if (!(d in n)) ops.push({ date: d, del: true }); });
+    return ops;
 }
-const b64enc = s => { const b = new TextEncoder().encode(s); let r = ''; for (let i = 0; i < b.length; i += 0x8000) r += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(r); };
-const b64dec = s => new TextDecoder('utf-8').decode(Uint8Array.from(atob(s.replace(/\s/g, '')), c => c.charCodeAt(0)));
-const ghUrl = () => `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${GH.path}`;
-const ghHead = () => ({ Authorization: 'Bearer ' + ghToken, Accept: 'application/vnd.github+json' });
-
-async function ghLoad() { // → { list, sha }
-    if (ghToken) {
-        const r = await fetch(ghUrl() + '?ref=' + GH.branch + '&t=' + Date.now(), { headers: ghHead(), cache: 'no-store' });
-        if (r.status === 404) return { list: null, sha: null };
-        if (!r.ok) throw new Error('GET ' + r.status);
-        const j = await r.json();
-        return { list: j.content ? JSON.parse(b64dec(j.content)) : [], sha: j.sha };
+function setHistErr(msg) {
+    histErr = msg || '';
+    if (msg) log('hist-error', { msg: String(msg).slice(0, 200) });
+    updateRecordUI();
+}
+async function histFetch(ops) { // → общая история (после применения ops)
+    if (!HIST_URL) {
+        if (ops) throw new Error('не задан адрес общей истории (HIST_URL)');
+        const r = await fetch('data/history.json?t=' + Date.now(), { cache: 'no-store' });
+        if (!r.ok) throw new Error('data/history.json ' + r.status);
+        return r.json();
     }
-    const r = await fetch(GH.path + '?t=' + Date.now(), { cache: 'no-store' }); // файл сайта (GitHub Pages), только чтение
-    if (r.status === 404) return { list: null, sha: null };
-    if (!r.ok) throw new Error('site ' + r.status);
-    return { list: await r.json(), sha: null };
+    const r = ops ? await fetch(HIST_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                                            body: JSON.stringify({ ops }) })
+                  : await fetch(HIST_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'ошибка скрипта');
+    return j.list;
 }
-function mergeOps(list, ops) {
-    const by = {};
-    (Array.isArray(list) ? list : []).forEach(r => { if (r && r.date) by[r.date] = r; });
-    Object.keys(ops).forEach(d => { if (ops[d].del) delete by[d]; else by[d] = ops[d].rec; });
-    return Object.values(by).sort((a, b) => b.date.localeCompare(a.date));
+function histSend(ops) { // по очереди, чтобы порядок изменений сохранялся
+    histQueue = histQueue.then(async () => {
+        try { const list = await histFetch(ops); setHistErr(''); applyRemote(list); log('hist-save', { n: ops.length }); }
+        catch (e) { setHistErr('Не сохранено: ' + (e.message || e)); loadHistory(); }
+    });
 }
-async function syncNow() {
-    if (location.protocol === 'file:' && !ghToken) { setSyncUI('ro'); return; }
-    if (syncBusy) { syncAgain = true; return; }
-    syncBusy = true; setSyncUI('busy');
-    try {
-        for (let attempt = 0; ; attempt++) {
-            const { list, sha } = await ghLoad();
-            if (list === null && !ghToken) throw new Error('в репозитории нет ' + GH.path); // общего файла нет — локальное не трогаем
-            if (!lsGet(STORE_SYNCINIT, false)) { // первый запуск на устройстве: свои записи за даты, которых нет в общей истории, — отправить
-                const have = new Set((list || []).map(r => r.date)), o = lsGet(STORE_OPS, {});
-                getHistory().forEach(r => { if (!have.has(r.date) && !o[r.date]) o[r.date] = { rec: r }; });
-                lsSet(STORE_OPS, o); lsSet(STORE_SYNCINIT, true);
-            }
-            // Истории разные — остаётся целиком более свежая: у заплыва (факта) — дата заплыва, у плана — дата заполнения.
-            if (list !== null) {
-                const lastFact = h => h.reduce((m, r) => { const t = r.plan ? (r.savedAt || '') : r.date; return t > m ? t : m; }, '');
-                const loc = getHistory(), lMax = lastFact(loc), rMax = lastFact(list);
-                if (rMax > lMax) lsSet(STORE_OPS, {});            // общая свежее — локальные правки не накладывать
-                else if (lMax > rMax) {                            // своя свежее — она и станет общей
-                    const o = {}, mine = new Set(loc.map(r => r.date));
-                    loc.forEach(r => o[r.date] = { rec: r });
-                    list.forEach(r => { if (!mine.has(r.date)) o[r.date] = { del: true }; });
-                    lsSet(STORE_OPS, o);
-                }
-                if (rMax !== lMax) log('sync-fresher', { local: lMax, remote: rMax });
-            }
-            const ops = lsGet(STORE_OPS, {}), sent = JSON.stringify(ops);
-            const merged = mergeOps(list || [], ops);
-            if (ghToken && (Object.keys(ops).length || list === null)) {
-                const r = await fetch(ghUrl(), { method: 'PUT', headers: ghHead(), body: JSON.stringify({
-                    message: 'swim: история (' + Object.keys(ops).sort().join(', ') + ')',
-                    content: b64enc(JSON.stringify(merged, null, 1)), branch: GH.branch, ...(sha ? { sha } : {}) }) });
-                if ((r.status === 409 || r.status === 422) && attempt < 3) continue; // файл успели поменять — ещё раз
-                if (!r.ok) throw new Error('PUT ' + r.status);
-                // убрать отправленные операции (новые, появившиеся за время отправки, остаются)
-                const now = lsGet(STORE_OPS, {}), was = JSON.parse(sent);
-                Object.keys(was).forEach(d => { if (JSON.stringify(now[d]) === JSON.stringify(was[d])) delete now[d]; });
-                lsSet(STORE_OPS, now);
-            }
-            applyRemote(mergeOps(merged, lsGet(STORE_OPS, {})));
-            log('sync', { n: merged.length, sent: ghToken ? Object.keys(JSON.parse(sent)).length : 0, ro: !ghToken });
-            break;
-        }
-        syncedOnce = true;
-        setSyncUI(ghToken ? 'ok' : 'ro');
-    } catch (e) {
-        log('sync-error', { msg: String(e).slice(0, 200) });
-        setSyncUI('err', String(e.message || e));
-    } finally {
-        syncBusy = false;
-        if (syncAgain) { syncAgain = false; syncNow(); }
-    }
+function loadHistory() {
+    histQueue = histQueue.then(async () => {
+        try {
+            const list = await histFetch(null);
+            if (histErr.startsWith('Нет связи')) setHistErr('');
+            applyRemote(list); migrateLocal(list);
+            log('hist-load', { n: list.length });
+        } catch (e) { setHistErr('Нет связи с общей историей: ' + (e.message || e)); }
+    });
+}
+// Один раз: записи старой версии из браузера за даты, которых нет в общей истории, — отправить; копии в браузере убрать.
+function migrateLocal(list) {
+    if (!HIST_URL) return;
+    const old = lsGet(STORE_HIST, null);
+    [STORE_HIST, 'swim.syncOps.v1', 'swim.gh.v1', 'swim.syncInit.v1'].forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
+    if (!Array.isArray(old)) return;
+    const have = new Set(list.map(r => r.date));
+    const ops = uniqByDate(old).filter(r => !have.has(r.date)).map(r => ({ date: r.date, rec: r }));
+    if (ops.length) { log('hist-migrate', { n: ops.length }); histSend(ops); }
 }
 // Принять общую историю. Открытую запись обновить в форме, если её не правят прямо сейчас.
 function applyRemote(list) {
@@ -2165,29 +2128,7 @@ function applyRemote(list) {
         if (lastFact) { applyRecord(lastFact, true, true); updateSwimRoute(); }
     }
 }
-function setSyncUI(st, msg) {
-    const b = $('syncBtn'); if (!b) return;
-    const pend = Object.keys(lsGet(STORE_OPS, {})).length;
-    st = st || (b.dataset.st || (ghToken ? 'ok' : 'ro'));
-    b.dataset.st = st;
-    b.className = 'light ' + st;
-    b.textContent = st === 'err' ? '☁️⚠️' : st === 'busy' ? '☁️…' : pend ? '☁️' + pend : '☁️';
-    const t = { ok: 'История общая: data/history.json в репозитории.', ro: 'Только чтение (нет ключа на этом устройстве). Клик — ввести ключ.',
-                busy: 'Синхронизация…', err: 'Ошибка синхронизации: ' + (msg || '') + '. Клик — проверить ключ.' }[st] || '';
-    b.dataset.tip = t + (pend ? `\nНе отправлено изменений: ${pend}` : '');
-}
-function syncSetup() {
-    const k = prompt('Ключ GitHub для записи истории (fine-grained token: репозиторий swim-tool, Contents — Read and write).\n'
-        + 'Хранится только в этом браузере. Пусто — отключить запись (останется чтение).', ghToken ? '••• (оставить как есть)' : '');
-    if (k === null) return;
-    if (!k.startsWith('•••')) {
-        ghToken = k.trim();
-        lsSet(STORE_GH, ghToken ? { token: ghToken } : {});
-        lsSet(STORE_SYNCINIT, false); // при подключении ключа — ещё раз сверить свои записи с общей историей
-    }
-    syncNow();
-}
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncNow(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') loadHistory(); });
 
 // ================= ТЕЛЕФОН: РАСКЛАДКА =================
 // Сверху — погода (строка с прокруткой), посередине — карта, снизу — то, что меняется в каждом заплыве:
@@ -2269,7 +2210,7 @@ function mPanel(id) {
     drawOsm();
     syncClarityLoc(); // грузит фрейм прозрачности с курортом заплыва
     feelRefresh();
-    setSyncUI(); syncNow(); // общая история из репозитория
+    loadHistory(); // общая история (Google Таблица)
 })();
 </script>
 </body>
