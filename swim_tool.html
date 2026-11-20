@@ -2053,13 +2053,17 @@ window.addEventListener('pagehide', () => { try { leaveDate(); } catch (e) {} })
 })();
 
 
-// ================= ОБЩАЯ ИСТОРИЯ (GOOGLE ТАБЛИЦА) =================
-// История одна на все устройства — в Google Таблице, через веб-приложение Apps Script (history-apps-script.gs), без ключа.
-// На устройстве копии нет: история только в памяти страницы. Читается при открытии и при возврате на вкладку,
+// ================= ОБЩАЯ ИСТОРИЯ (ПРИВАТНЫЙ РЕПОЗИТОРИЙ GITHUB) =================
+// История одна на все устройства — файл history.json в приватном репозитории sklddjewiodjewi/swim-data.
+// Доступ — ключ GitHub (fine-grained token: только swim-data, Contents — Read and write), вводится один раз на устройстве,
+// хранится только в этом браузере (swim.ghdata.v1); в коде и файлах его нет.
+// На устройстве копии истории нет: она только в памяти страницы. Читается при открытии и при возврате на вкладку,
 // каждое изменение сразу отправляется. Не отправилось — изменение не сохранено (⚠️ у 💾), показывается общая история.
-// Пока адрес скрипта не задан — только чтение data/history.json с сайта.
-const HIST_URL = ''; // адрес веб-приложения Apps Script (…/exec)
-let histQueue = Promise.resolve(), histErr = '', syncApplying = false;
+const STORE_KEY = 'swim.ghdata.v1';
+const GHD = { owner: 'sklddjewiodjewi', repo: 'swim-data', path: 'history.json', branch: 'main' };
+let histQueue = Promise.resolve(), histErr = '', syncApplying = false, keyAsked = false;
+let histLast = null; // последняя общая история, полученная с сервера (на неё откат при неудачной записи)
+let ghKey = (lsGet(STORE_KEY, {}) || {}).token || '';
 
 function histOps(oldH, newH) {
     const o = {}, n = {}, ops = [];
@@ -2074,40 +2078,65 @@ function setHistErr(msg) {
     if (msg) log('hist-error', { msg: String(msg).slice(0, 200) });
     updateRecordUI();
 }
-async function histFetch(ops) { // → общая история (после применения ops)
-    if (!HIST_URL) {
-        if (ops) throw new Error('не задан адрес общей истории (HIST_URL)');
-        const r = await fetch('data/history.json?t=' + Date.now(), { cache: 'no-store' });
-        if (!r.ok) throw new Error('data/history.json ' + r.status);
-        return r.json();
-    }
-    const r = ops ? await fetch(HIST_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                                            body: JSON.stringify({ ops }) })
-                  : await fetch(HIST_URL + '?t=' + Date.now(), { cache: 'no-store' });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const j = await r.json();
-    if (!j.ok) throw new Error(j.error || 'ошибка скрипта');
-    return j.list;
+// Ключ: спросить один раз (или по клику на ⚠️ у 💾). Пусто/отмена — ключа нет.
+function askKey(force) {
+    if (ghKey && !force) return true;
+    if (keyAsked && !force) return false;
+    keyAsked = true;
+    const k = prompt('Ключ GitHub для общей истории (fine-grained token: репозиторий swim-data, Contents — Read and write).\n'
+        + 'Вводится один раз на этом устройстве и хранится только в этом браузере.', '');
+    if (k === null || !k.trim()) return !!ghKey;
+    ghKey = k.trim(); lsSet(STORE_KEY, { token: ghKey });
+    return true;
 }
-function histSend(ops) { // по очереди, чтобы порядок изменений сохранялся
+const b64enc = s => { const b = new TextEncoder().encode(s); let r = ''; for (let i = 0; i < b.length; i += 0x8000) r += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(r); };
+const b64dec = s => new TextDecoder('utf-8').decode(Uint8Array.from(atob(s.replace(/\s/g, '')), c => c.charCodeAt(0)));
+const ghdUrl = () => `https://api.github.com/repos/${GHD.owner}/${GHD.repo}/contents/${GHD.path}`;
+const ghdHead = () => ({ Authorization: 'Bearer ' + ghKey, Accept: 'application/vnd.github+json' });
+async function ghdGet() { // → { list, sha }
+    const r = await fetch(ghdUrl() + '?ref=' + GHD.branch + '&t=' + Date.now(), { headers: ghdHead(), cache: 'no-store' });
+    if (r.status === 401 || r.status === 403 || r.status === 404) {
+        throw new Error(r.status === 404 ? 'нет доступа к swim-data (ключ не для этого репозитория?)' : 'ключ не подходит (' + r.status + ')');
+    }
+    if (!r.ok) throw new Error('GitHub ' + r.status);
+    const j = await r.json();
+    return { list: j.content ? JSON.parse(b64dec(j.content)) : [], sha: j.sha };
+}
+async function histFetch(ops) { // → общая история (после применения ops)
+    if (!askKey()) throw new Error('нет ключа GitHub — клик здесь, чтобы ввести');
+    for (let attempt = 0; ; attempt++) {
+        const { list, sha } = await ghdGet();
+        if (!ops) return list;
+        const by = {};
+        list.forEach(r => { if (r && r.date) by[r.date] = r; });
+        ops.forEach(op => { if (op.del) delete by[op.date]; else by[op.date] = op.rec; });
+        const merged = Object.values(by).sort((a, b) => b.date.localeCompare(a.date));
+        const r = await fetch(ghdUrl(), { method: 'PUT', headers: ghdHead(), body: JSON.stringify({
+            message: 'swim: история (' + ops.map(o => o.date).sort().join(', ') + ')',
+            content: b64enc(JSON.stringify(merged, null, 1)), branch: GHD.branch, sha }) });
+        if ((r.status === 409 || r.status === 422) && attempt < 3) continue; // файл успели поменять — ещё раз
+        if (!r.ok) throw new Error('запись в GitHub ' + r.status);
+        return merged;
+    }
+}function histSend(ops) { // по очереди, чтобы порядок изменений сохранялся
     histQueue = histQueue.then(async () => {
-        try { const list = await histFetch(ops); setHistErr(''); applyRemote(list); log('hist-save', { n: ops.length }); }
-        catch (e) { setHistErr('Не сохранено: ' + (e.message || e)); loadHistory(); }
+        try { const list = await histFetch(ops); histLast = list; setHistErr(''); applyRemote(list); log('hist-save', { n: ops.length }); }
+        catch (e) { setHistErr('Не сохранено: ' + (e.message || e)); applyRemote(histLast || []); loadHistory(); }
     });
 }
 function loadHistory() {
     histQueue = histQueue.then(async () => {
         try {
             const list = await histFetch(null);
-            if (histErr.startsWith('Нет связи')) setHistErr('');
+            histLast = list;
+            if (histErr && !histErr.startsWith('Не сохранено')) setHistErr(''); // «не сохранено» висит до следующей удачной записи
             applyRemote(list); migrateLocal(list);
             log('hist-load', { n: list.length });
-        } catch (e) { setHistErr('Нет связи с общей историей: ' + (e.message || e)); }
+        } catch (e) { if (!histErr.startsWith('Не сохранено')) setHistErr('Нет связи с общей историей: ' + (e.message || e)); }
     });
 }
 // Один раз: записи старой версии из браузера за даты, которых нет в общей истории, — отправить; копии в браузере убрать.
 function migrateLocal(list) {
-    if (!HIST_URL) return;
     const old = lsGet(STORE_HIST, null);
     [STORE_HIST, 'swim.syncOps.v1', 'swim.gh.v1', 'swim.syncInit.v1'].forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
     if (!Array.isArray(old)) return;
@@ -2210,7 +2239,9 @@ function mPanel(id) {
     drawOsm();
     syncClarityLoc(); // грузит фрейм прозрачности с курортом заплыва
     feelRefresh();
-    loadHistory(); // общая история (Google Таблица)
+    // ⚠️ у 💾 из-за ключа — клик: ввести ключ заново
+    $('saveStatus').addEventListener('click', () => { if (/ключ/.test(histErr) && askKey(true)) loadHistory(); });
+    loadHistory(); // общая история (swim-data)
 })();
 </script>
 </body>
