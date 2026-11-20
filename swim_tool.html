@@ -1581,7 +1581,7 @@ function onEdit() {
 
 function recordFromForm(date, plan) {
     const rs = resortById(val('locationSelect'));
-    return { date, ...lastResult, location: val('locationSelect'), locName: rs ? rs.name : null, locShort: rs ? rs.short : null, depth: num('swimDepth'), seaSide,
+    return { date, savedAt: new Date().toISOString(), ...lastResult, location: val('locationSelect'), locName: rs ? rs.name : null, locShort: rs ? rs.short : null, depth: num('swimDepth'), seaSide,
              points: points.map(p => [p.lat, p.lng]), plan, feelVis: plan ? null : feel.actual, feelAt: plan ? null : feel.at,
              ...(plan ? { targetKm: num('targetKm'), targetKcal: num('targetKcal'), planBy } : {}) };
 }
@@ -1592,8 +1592,10 @@ function autoSave() {
     const rec = getHistory().find(r => r.date === openDate);   // только запись открытой даты
     if (!rec) { updateRecordUI(); return; }       // черновик — не пишем
     if (!lastResult) return;                      // нет трека/времени — запись не трогаем
-    const date = rec.date;
-    setHistory(getHistory().filter(r => r.date !== date).concat([recordFromForm(date, !!rec.plan)]));
+    const date = rec.date, nrec = recordFromForm(date, !!rec.plan);
+    const body = r => { const { savedAt, ...b } = r; return JSON.stringify(b); };
+    if (body(nrec) === body(rec)) { updateRecordUI(); return; } // ничего не изменилось — дата заполнения та же
+    setHistory(getHistory().filter(r => r.date !== date).concat([nrec]));
     lastSavedAt = new Date();
     log('autosave', { date, km: r3(lastResult.distanceKm), plan: !!rec.plan });
     updateRecordUI();
@@ -1616,7 +1618,7 @@ function markDone(date, ev) {
     if (ev) ev.stopPropagation();
     const h = getHistory(), r = h.find(x => x.date === date);
     if (!r) return;
-    r.plan = false; delete r.targetKm; delete r.targetKcal; delete r.planBy;
+    r.plan = false; delete r.targetKm; delete r.targetKcal; delete r.planBy; r.savedAt = new Date().toISOString();
     setHistory(h);
     log('plan-done', { date });
     if (date === openDate) { applyRecord(getHistory().find(x => x.date === date), true); updateSwimRoute(); renderHistory(); return; }
@@ -1647,9 +1649,17 @@ const fmtDate = s => {
     return y === String(new Date().getFullYear()) ? `${d}.${mo}` : `${d}.${mo}.${y.slice(2)}`;
 };
 
-function getHistory() { return lsGet(STORE_HIST, []); }
+// Одна запись на дату — дубликатов не бывает. Из повторов остаётся более поздняя по savedAt (при равенстве — последняя).
+function uniqByDate(h) {
+    const by = {};
+    (Array.isArray(h) ? h : []).forEach(r => { if (!r || !r.date) return; const o = by[r.date];
+        if (!o || (r.savedAt || '') >= (o.savedAt || '')) by[r.date] = r; });
+    return Object.values(by);
+}
+function getHistory() { return uniqByDate(lsGet(STORE_HIST, [])).sort((a, b) => b.date.localeCompare(a.date)); }
 function setHistory(h) {
     const old = syncApplying ? null : getHistory();
+    h = uniqByDate(h);
     h.sort((a, b) => b.date.localeCompare(a.date)); lsSet(STORE_HIST, h); renderHistory();
     if (old) noteSyncOps(old, h);
 }
@@ -2099,6 +2109,19 @@ async function syncNow() {
                 const have = new Set((list || []).map(r => r.date)), o = lsGet(STORE_OPS, {});
                 getHistory().forEach(r => { if (!have.has(r.date) && !o[r.date]) o[r.date] = { rec: r }; });
                 lsSet(STORE_OPS, o); lsSet(STORE_SYNCINIT, true);
+            }
+            // Истории разные — остаётся целиком более свежая: у заплыва (факта) — дата заплыва, у плана — дата заполнения.
+            if (list !== null) {
+                const lastFact = h => h.reduce((m, r) => { const t = r.plan ? (r.savedAt || '') : r.date; return t > m ? t : m; }, '');
+                const loc = getHistory(), lMax = lastFact(loc), rMax = lastFact(list);
+                if (rMax > lMax) lsSet(STORE_OPS, {});            // общая свежее — локальные правки не накладывать
+                else if (lMax > rMax) {                            // своя свежее — она и станет общей
+                    const o = {}, mine = new Set(loc.map(r => r.date));
+                    loc.forEach(r => o[r.date] = { rec: r });
+                    list.forEach(r => { if (!mine.has(r.date)) o[r.date] = { del: true }; });
+                    lsSet(STORE_OPS, o);
+                }
+                if (rMax !== lMax) log('sync-fresher', { local: lMax, remote: rMax });
             }
             const ops = lsGet(STORE_OPS, {}), sent = JSON.stringify(ops);
             const merged = mergeOps(list || [], ops);
